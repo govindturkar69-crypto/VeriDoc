@@ -1,0 +1,34 @@
+SAMPLE COLLEGE HANDBOOK (dummy data for testing VeriDoc)
+=========================================================
+Replace this file with your real college documents.
+
+FEES
+----
+The last date to pay the semester fee is 15 August 2026. A late fee of
+Rs. 500 applies after this date. Payment can be made online through the
+student portal or at the accounts office. The fee for a duplicate ID
+card is Rs. 100.
+
+EXAMINATIONS
+------------
+A minimum of 75% attendance is required to be eligible to sit for the
+end-semester examinations. Students below 75% may apply for condonation
+with a valid medical certificate. To apply for re-evaluation of an
+answer sheet, submit the re-evaluation form within 10 days of the result
+declaration, along with a fee of Rs. 300 per subject.
+
+SCHOLARSHIPS
+------------
+The merit scholarship is available to students who score 85% or above in
+the previous semester and have no pending disciplinary action. The
+application window opens in the first week of each semester.
+
+ACADEMIC CALENDAR
+-----------------
+The winter vacation for the 2026-27 session starts on 22 December 2026
+and classes resume on 5 January 2027.
+
+HOSTEL RULES
+------------
+Hostel curfew is 9:30 PM on weekdays and 10:30 PM on weekends. Visitors
+are allowed only in the common room between 4:00 PM and 6:00 PM.

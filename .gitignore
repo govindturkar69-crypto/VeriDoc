@@ -1,0 +1,5 @@
+__pycache__/
+chroma_db/
+.venv/
+.env
+evaluation/results.csv
