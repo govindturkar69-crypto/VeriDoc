@@ -1,11 +1,62 @@
 question,expected_answer,should_answer
-What is the last date to pay the semester fee?,See fee circular,yes
-What is the minimum attendance required to sit for exams?,See exam rules,yes
-Who is eligible for the merit scholarship?,See scholarship policy,yes
-When does the winter vacation start?,See academic calendar,yes
-What are the hostel curfew timings?,See hostel rules,yes
-How do I apply for a re-evaluation of my exam paper?,See exam rules,yes
-What is the fee for a duplicate ID card?,See fee circular,yes
-Can I get the principal's personal phone number?,Not in documents,no
-What is the stock price of the college today?,Not in documents,no
-What will next year's fee be?,Not in documents,no
+What is the last date to pay the odd semester fee?,15 August 2026,yes
+What is the last date to pay the even semester fee?,10 January 2027,yes
+How much is the late fee for paying after the due date?,Rs. 500,yes
+What is the tuition fee per semester for B.Tech?,Rs. 95000,yes
+What is the total semester fee excluding hostel?,Rs. 116500,yes
+How much is the development fee per semester?,Rs. 8000,yes
+What is the examination fee per semester?,Rs. 3500,yes
+How much is the library fee per semester?,Rs. 2000,yes
+What is the hostel accommodation charge for a shared 3-seater room?,Rs. 45000 per semester,yes
+What is the hostel charge for twin sharing accommodation?,Rs. 58000 per semester,yes
+How much are the mess charges per semester?,Rs. 28000,yes
+What is the hostel security deposit and is it refundable?,Rs. 10000 one-time refundable,yes
+How much does a duplicate ID card cost?,Rs. 100,yes
+What is the fee for a bonafide or transfer certificate?,Rs. 200,yes
+How much is a duplicate mark sheet?,Rs. 500,yes
+What is the fee for answer-sheet re-evaluation per subject?,Rs. 300,yes
+How much does a photocopy of an answer sheet cost per subject?,Rs. 150,yes
+What is the backlog re-examination fee per subject?,Rs. 800,yes
+What happens if the fee is unpaid for 30 days after the due date?,Registration for the semester may be cancelled,yes
+Is cash payment accepted for large fee amounts?,Cash payments above Rs. 10000 are not accepted,yes
+What is the refund policy if I withdraw before classes start?,Tuition fee refunded after deducting Rs. 1000 processing charge,yes
+Within how many days are refunds processed?,45 days,yes
+What is the minimum attendance required to appear for exams?,75 percent,yes
+Can I get condonation if my attendance is between 65 and 75 percent?,Yes with a valid medical certificate and Rs. 250 per subject fee,yes
+What happens if my attendance is below 65 percent?,The student is detained and must repeat the semester,yes
+What is the minimum percentage needed to pass a subject?,40 percent in end-semester and 40 percent aggregate,yes
+Within how many days can I apply for re-evaluation?,Within 10 days of result declaration,yes
+When are revaluation results declared?,Within 30 days,yes
+What is the maximum number of backlog subjects I can carry to the next year?,Four,yes
+How many books can an undergraduate borrow at a time?,4 books,yes
+For how many days can library books be borrowed?,14 days,yes
+What are the library working hours on weekdays?,8:00 AM to 8:00 PM,yes
+What are the library timings on Saturday?,9:00 AM to 1:00 PM,yes
+What is the library late return fine?,Rs. 5 per day per book,yes
+What is the National Anti-Ragging Helpline number?,1800-180-5522,yes
+Where is the Grievance Redressal Cell located?,Room No. 108 Administrative Block,yes
+Within how many days must the Grievance Cell respond?,7 working days,yes
+When was Sunrise Institute of Technology established?,2004,yes
+Who is eligible for the merit scholarship?,Students with 85 percent or above no backlog and no disciplinary action,yes
+What benefit does the merit scholarship give?,50 percent waiver on tuition fee,yes
+What do the top three rank-holders in each programme receive?,Full 100 percent tuition waiver,yes
+What is the income limit for the means-based scholarship?,Annual family income below Rs. 250000,yes
+What waiver does the means-based scholarship provide?,30 percent tuition fee waiver,yes
+Can I get both merit and means-based scholarship together?,No the student receives whichever is higher,yes
+When does the scholarship application window open?,First week of each semester for 21 days,yes
+When do classes commence for the odd semester?,21 July 2026,yes
+When do the odd semester end-semester examinations begin?,8 December 2026,yes
+When does the winter vacation begin?,22 December 2026,yes
+When do classes resume after winter vacation?,5 January 2027,yes
+When do the even semester end-semester examinations begin?,3 May 2027,yes
+When does the summer vacation begin?,24 May 2027,yes
+Which programmes can I apply for in the admission form?,CSE IT ECE Mechanical and Civil,yes
+What documents must be enclosed with the admission form?,10th and 12th mark sheets JEE/CET score card TC category certificate Aadhaar and photographs,yes
+What is the principal's personal mobile number?,Not in the documents,no
+What is the campus Wi-Fi password?,Not in the documents,no
+What is the average placement package at the college?,Not in the documents,no
+What will the tuition fee be in 2027-28?,Not in the documents,no
+How many parking spaces are there on campus?,Not in the documents,no
+What is on the canteen menu today?,Not in the documents,no
+Who is the founder of the institute?,Not in the documents,no
+What are the college bus transport routes?,Not in the documents,no
