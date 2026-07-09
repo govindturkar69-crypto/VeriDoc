@@ -1,0 +1,8 @@
+# Stops Streamlit from scanning heavy ML libraries (transformers) on every
+# change, which otherwise floods the terminal with harmless torchvision
+# "ModuleNotFoundError" warnings. The app works fine either way.
+[server]
+fileWatcherType = "none"
+
+[logger]
+level = "error"
