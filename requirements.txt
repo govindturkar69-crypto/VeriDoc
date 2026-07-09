@@ -1,6 +1,6 @@
 # --- Core RAG ---
 sentence-transformers
-chromadb
+numpy
 
 # --- Document loading ---
 pymupdf

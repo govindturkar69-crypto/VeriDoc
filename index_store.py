@@ -1,22 +1,27 @@
 """
 Phase 3 (part 1) — Build the search index.
 
-Embeds every chunk and stores it in a local ChromaDB collection.
-Run this whenever you add or change documents:
+Uses a lightweight in-memory vector store (NumPy) instead of a heavy native
+database. For a small document set this is fast, uses little memory, and works
+everywhere (local + cloud, any Python version). The index is embedded and saved
+to a single pickle file so it can be reused without rebuilding.
 
+Run this whenever you add or change documents:
     python index_store.py
 """
 from __future__ import annotations
-import shutil
+import pickle
 
-import chromadb
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
 import config
 from ingest import load_documents
 
+STORE_PATH = config.CHROMA_DIR / "store.pkl"
 
 _embedder = None
+_store = None
 
 
 def get_embedder() -> SentenceTransformer:
@@ -28,37 +33,48 @@ def get_embedder() -> SentenceTransformer:
     return _embedder
 
 
-def get_collection(reset: bool = False):
-    """Return the ChromaDB collection (optionally wiped first)."""
-    if reset and config.CHROMA_DIR.exists():
-        shutil.rmtree(config.CHROMA_DIR)
-    client = chromadb.PersistentClient(path=str(config.CHROMA_DIR))
-    return client.get_or_create_collection(
-        name=config.COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"},
-    )
+def load_store() -> dict:
+    """Load the saved index into memory (or return an empty one)."""
+    global _store
+    if _store is None:
+        if STORE_PATH.exists():
+            with open(STORE_PATH, "rb") as f:
+                _store = pickle.load(f)
+        else:
+            _store = {"ids": [], "texts": [], "sources": [], "pages": [],
+                      "vectors": np.zeros((0, 384), dtype=np.float32)}
+    return _store
+
+
+def count() -> int:
+    return len(load_store()["ids"])
 
 
 def build_index() -> None:
     """Full rebuild: load docs, embed, store."""
+    global _store
     chunks = load_documents()
     if not chunks:
         return
 
     embedder = get_embedder()
-    collection = get_collection(reset=True)
-
     texts = [c.text for c in chunks]
     print(f"Embedding {len(texts)} chunks ...")
-    vectors = embedder.encode(texts, show_progress_bar=True, normalize_embeddings=True)
+    vectors = embedder.encode(texts, show_progress_bar=False, normalize_embeddings=True)
+    vectors = np.asarray(vectors, dtype=np.float32)
 
-    collection.add(
-        ids=[c.chunk_id for c in chunks],
-        embeddings=[v.tolist() for v in vectors],
-        documents=texts,
-        metadatas=[{"source": c.source, "page": c.page} for c in chunks],
-    )
-    print(f"\nIndex built: {collection.count()} chunks stored in {config.CHROMA_DIR}")
+    _store = {
+        "ids": [c.chunk_id for c in chunks],
+        "texts": texts,
+        "sources": [c.source for c in chunks],
+        "pages": [c.page for c in chunks],
+        "vectors": vectors,
+    }
+
+    config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(STORE_PATH, "wb") as f:
+        pickle.dump(_store, f)
+    print(f"\nIndex built: {len(texts)} chunks stored in {STORE_PATH}")
 
 
 if __name__ == "__main__":
