@@ -1,0 +1,22 @@
+# --- Core RAG ---
+sentence-transformers
+chromadb
+
+# --- Document loading ---
+pymupdf
+python-docx
+beautifulsoup4
+pytesseract
+Pillow
+
+# --- UI ---
+streamlit
+
+# --- LLM backends ---
+google-generativeai      # for LLM_MODE = "gemini" (free, used on cloud)
+openai                   # for LLM_MODE = "openai"
+# ollama is a separate desktop app (local only), no pip package required
+
+# --- Utilities ---
+python-dotenv
+pandas

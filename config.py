@@ -4,9 +4,15 @@ Change settings here; the rest of the code reads from this file.
 """
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-load_dotenv()
+# Loading a local .env file is optional. On cloud hosting (Streamlit Cloud)
+# there is no .env and python-dotenv may not be installed — that's fine,
+# because secrets are provided as environment variables instead.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
