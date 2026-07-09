@@ -1,90 +1,156 @@
-# VeriDoc — Citation-Grounded Q&A Assistant for Institutional Documents
+<!-- ====================== ANIMATED HEADER ====================== -->
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=1F335A&height=200&section=header&text=VeriDoc&fontSize=80&fontColor=ffffff&desc=Citation-Grounded%20Q%26A%20Assistant%20for%20Institutional%20Documents&descSize=18&descAlignY=72" width="100%"/>
+</p>
 
-> "Answers you can trust, straight from the source."
+<p align="center">
+  <a href="https://veridoc-9td5zj9kteg5cly2vnaz6b.streamlit.app/">
+    <img src="https://readme-typing-svg.demolab.com/?font=Segoe+UI&weight=600&size=24&pause=1000&color=2E6DB4&center=true&vCenter=true&width=650&lines=Answers+you+can+trust%2C+straight+from+the+source.;No+hallucinations+%E2%80%94+every+answer+is+cited.;Says+%22not+found%22+instead+of+guessing." alt="Typing SVG"/>
+  </a>
+</p>
 
-VeriDoc answers questions about your college **only** from official documents.
-Every answer shows the exact source, and it says *"not found in the official
-documents"* instead of guessing. This is the whole point — no hallucinations.
+<!-- ====================== BADGES ====================== -->
+<p align="center">
+  <a href="https://veridoc-9td5zj9kteg5cly2vnaz6b.streamlit.app/">
+    <img src="https://img.shields.io/badge/%F0%9F%9A%80_Live_Demo-Open_App-2E6DB4?style=for-the-badge" alt="Live Demo"/>
+  </a>
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white"/>
+  <img src="https://img.shields.io/badge/RAG-Retrieval_Augmented-1F335A?style=for-the-badge"/>
+</p>
+
+<p align="center">
+  <b>🔗 Live app:</b>
+  <a href="https://veridoc-9td5zj9kteg5cly2vnaz6b.streamlit.app/">veridoc-9td5zj9kteg5cly2vnaz6b.streamlit.app</a>
+</p>
 
 ---
 
-## 1. What this starter gives you
+## 📌 What is VeriDoc?
 
-A working Retrieval-Augmented Generation (RAG) skeleton:
+**VeriDoc** answers questions about an institution — fees, exam rules, scholarships,
+the academic calendar, hostel rules — using **only its official documents**.
+
+Unlike a normal chatbot, VeriDoc:
+
+- ✅ **Cites the source** for every answer (exact document + passage)
+- 🚫 **Never hallucinates** — it refuses honestly when the answer isn't in the documents
+- 🔍 **Understands meaning**, not just keywords (semantic search)
+
+> The hard part everyone gets wrong — *grounding, citation, and honest refusal* — is
+> exactly what VeriDoc is built around.
+
+---
+
+## ✨ Features
+
+| | Feature | Description |
+|---|---|---|
+| 🧠 | **Semantic search** | Finds the right passage even when the question is worded differently |
+| 📎 | **Citations** | Every answer links back to the exact source text |
+| 🛡️ | **Honest refusal** | Two-layer guard: a relevance gate + a strict grounding prompt |
+| ⚡ | **Lightweight** | In-memory NumPy vector store — no heavy database, runs anywhere |
+| 🔄 | **Swappable LLM** | Ollama (free, offline) locally · Google Gemini (free API) on the cloud |
+| 🖥️ | **Simple UI** | Streamlit chat with an expandable "Show sources" panel |
+
+---
+
+## 🏗️ How it works
 
 ```
-veridoc/
-├── documents/          <- put your college PDFs / DOCX / TXT here
-├── config.py           <- all settings in one place
-├── ingest.py           <- Phase 2: load + clean documents (with OCR)
-├── index_store.py      <- Phase 3: chunk + embed + store in ChromaDB
-├── retriever.py        <- Phase 3: retrieve + re-rank passages
-├── answer.py           <- Phase 4: grounded answer with citation / refusal
-├── app.py              <- Phase 5: Streamlit chat UI
-├── evaluation/         <- Phase 6: benchmark template
-├── requirements.txt
-└── .env.example        <- copy to .env and add your API key (if using one)
+                ┌──────────── OFFLINE (once) ────────────┐
+   Documents ─▶ Ingest + OCR ─▶ Chunk ─▶ Embed ─▶ Vector Store (NumPy)
+                                                          │
+                ┌──────────── ONLINE (per question) ──────┘
+   Question ─▶ Retrieve + Re-rank ─▶ Relevance Gate ─▶ LLM (grounded) ─▶ Answer + Citation
+                                          │
+                                          └─▶ (low score) ─▶ "Not found in official documents"
 ```
 
-## 2. Setup (do this first)
+---
+
+## 🧰 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Python |
+| UI | Streamlit |
+| Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
+| Vector search | NumPy (in-memory cosine similarity) |
+| Re-ranking | cross-encoder (`ms-marco-MiniLM`) — optional |
+| LLM | Ollama · Llama 3 (local) / Google Gemini (cloud) |
+| Doc parsing | PyMuPDF, python-docx, BeautifulSoup, Tesseract (OCR) |
+
+---
+
+## 🚀 Run it locally
 
 ```bash
-# 1. create a virtual environment
-python -m venv .venv
-# Windows:  .venv\Scripts\activate
-# Mac/Linux: source .venv/bin/activate
+# 1. clone
+git clone https://github.com/govindturkar69-crypto/VeriDoc.git
+cd VeriDoc
 
-# 2. install dependencies
+# 2. install
+python -m venv .venv
+.venv\Scripts\activate          # Windows  (Mac/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 
-# 3. (only if you use an API model) copy env file and add your key
-cp .env.example .env        # then edit .env
-```
+# 3. (local LLM) install Ollama, then:
+ollama pull llama3
 
-You also need **Tesseract** installed for OCR of scanned PDFs:
-- Windows: download the installer from the Tesseract-OCR project.
-- Mac: `brew install tesseract`
-- Linux: `sudo apt install tesseract-ocr`
-
-## 3. Choose your LLM (two options)
-
-Open `config.py` and set `LLM_MODE`:
-
-- `"ollama"` — free & offline. Install Ollama, then `ollama pull llama3`.
-- `"openai"` — easier/higher quality. Put your key in `.env`.
-
-The retrieval + embeddings run locally and are free in both cases.
-
-## 4. Run it
-
-```bash
-# Step A: put a few college PDFs into  documents/
-# Step B: build the search index
+# 4. add your PDFs to  documents/  then build the index
 python index_store.py
 
-# Step C: launch the app
+# 5. launch
 streamlit run app.py
 ```
 
-Ask a question, read the answer, and click "Show sources" to verify it.
+Try asking: *"What is the last date to pay the fee?"* — then click **Show sources**.
+Then ask something not in the documents to see the honest refusal.
 
-## 5. Where each project phase lives
+---
 
-| Phase | File(s) | Status in starter |
-|---|---|---|
-| 1. Research & planning | `docs/PHASE1_CHECKLIST.md` | checklist provided |
-| 2. Document ingestion | `ingest.py` | working |
-| 3. Retrieval | `index_store.py`, `retriever.py` | working |
-| 4. Grounded answering | `answer.py` | working (core logic) |
-| 5. User interface | `app.py` | working |
-| 6. Evaluation | `evaluation/benchmark.csv`, `evaluation/evaluate.py` | template |
+## ☁️ Deployment
 
-## 6. Your job from here (this is the real project work)
+The live app runs on **Streamlit Community Cloud** using **Google Gemini** (free API tier),
+since cloud hosting can't run a local model. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the
+full step-by-step guide. Local and cloud share the same code — only the LLM setting changes.
 
-- Phase 1: fill `documents/` with **real** college files and build the benchmark.
-- Phase 4: tune the prompt in `answer.py` so refusals are reliable.
-- Phase 6: expand `evaluation/benchmark.csv` to ~120 questions and compare
-  against keyword search + a vanilla chatbot. This comparison is your
-  main contribution — don't skip it.
+---
 
-Good luck. Commit to GitHub early and often.
+## 📊 Evaluation
+
+VeriDoc is benchmarked on **61 real questions** (53 answerable + 8 unanswerable) and
+compared against a keyword-search baseline and a plain chatbot.
+
+```bash
+python evaluation/compare.py
+```
+
+The key result: **only VeriDoc refuses correctly** on unanswerable questions, while the
+baselines answer anyway — making VeriDoc the most trustworthy of the three.
+
+---
+
+## 📁 Project structure
+
+```
+veridoc/
+├── documents/          # official institutional documents (PDF/DOCX/TXT)
+├── ingest.py           # load + clean documents (with OCR)
+├── index_store.py      # embed + build the NumPy vector index
+├── retriever.py        # retrieve + re-rank passages
+├── answer.py           # grounded answering (citation + honest refusal)
+├── app.py              # Streamlit chat UI
+├── evaluation/         # benchmark + three-way comparison
+├── DEPLOYMENT.md       # cloud deployment guide
+└── requirements.txt
+```
+
+---
+
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=1F335A&height=120&section=footer"/>
+</p>
+
+<p align="center"><i>Final Year Project · B.Tech Computer Science & Engineering</i></p>
