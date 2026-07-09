@@ -74,9 +74,23 @@ def _call_openai(prompt: str) -> str:
     return resp.choices[0].message.content.strip()
 
 
+def _call_gemini(prompt: str) -> str:
+    """Google Gemini — free API tier, used for cloud deployment."""
+    import google.generativeai as genai
+    genai.configure(api_key=config.GEMINI_API_KEY)
+    model = genai.GenerativeModel(config.GEMINI_MODEL)
+    resp = model.generate_content(
+        prompt,
+        generation_config={"temperature": 0.0},
+    )
+    return resp.text.strip()
+
+
 def _call_llm(prompt: str) -> str:
     if config.LLM_MODE == "openai":
         return _call_openai(prompt)
+    if config.LLM_MODE == "gemini":
+        return _call_gemini(prompt)
     return _call_ollama(prompt)
 
 

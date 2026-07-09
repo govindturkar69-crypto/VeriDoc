@@ -11,8 +11,21 @@ import streamlit as st
 
 import config
 from answer import ask, format_citation
+from index_store import get_collection, build_index
 
 st.set_page_config(page_title="VeriDoc", page_icon="📄", layout="centered")
+
+
+@st.cache_resource(show_spinner="Building the document index (first run only)...")
+def _ensure_index():
+    """Build the search index automatically if it doesn't exist yet.
+    This lets the app run on cloud hosting without a manual index step."""
+    if get_collection().count() == 0:
+        build_index()
+    return True
+
+
+_ensure_index()
 
 st.title("📄 VeriDoc")
 st.caption("Answers you can trust, straight from the source.")

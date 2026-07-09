@@ -2,4 +2,6 @@ __pycache__/
 chroma_db/
 .venv/
 .env
+.streamlit/secrets.toml
 evaluation/results.csv
+evaluation/comparison.csv

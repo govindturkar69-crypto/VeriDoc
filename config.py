@@ -23,7 +23,9 @@ EMBED_MODEL = "all-MiniLM-L6-v2"   # try "BAAI/bge-small-en-v1.5" for better qua
 
 # --- Retrieval ---
 TOP_K = 5               # passages retrieved per question
-USE_RERANK = True       # set False if you want faster (less accurate) results
+# Re-ranking improves accuracy but uses more memory. On free cloud hosting
+# (limited RAM) set the env var USE_RERANK=false to turn it off.
+USE_RERANK = os.getenv("USE_RERANK", "true").lower() == "true"
 RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 # The retrieval score below which we treat the question as "not answerable".
@@ -31,9 +33,17 @@ RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 MIN_RELEVANCE = 0.15
 
 # --- LLM ---
-# "ollama"  -> free, offline (install Ollama + `ollama pull llama3`)
-# "openai"  -> needs OPENAI_API_KEY in .env
-LLM_MODE = "ollama"
+# "ollama"  -> free, offline local (install Ollama + `ollama pull llama3`)
+# "gemini"  -> free API, works on cloud (needs GEMINI_API_KEY)
+# "openai"  -> paid API (needs OPENAI_API_KEY)
+# The env var LLM_MODE overrides this, so the cloud can set it via Secrets
+# without changing code. Locally it stays "ollama".
+LLM_MODE = os.getenv("LLM_MODE", "ollama")
+
 OLLAMA_MODEL = "llama3"
+
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
