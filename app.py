@@ -2,14 +2,18 @@
 Phase 5 — Streamlit chat UI.
 
 Features: animated header, confidence badge, document panel, feedback buttons,
-voice input, admin document upload, Hindi/Hinglish answers, example chips,
-source highlighting, follow-up suggestions, and PDF export of the chat.
+voice input, admin upload, Hindi/Hinglish answers, example chips, source
+highlighting, follow-up suggestions, PDF export, deadline reminders,
+conflicting-information detection, plain-language simplifier, voice answers.
 
 Run with:
     streamlit run app.py
 """
 import io
 import re
+import json
+import datetime
+from collections import defaultdict
 
 import streamlit as st
 
@@ -77,6 +81,9 @@ FOLLOWUP_POOL = [
     "What is the anti-ragging helpline number?",
     "What is the late fee for paying after the due date?",
 ]
+MONTHS = {m[:3]: i for i, m in enumerate(
+    ["january", "february", "march", "april", "may", "june", "july",
+     "august", "september", "october", "november", "december"], 1)}
 
 
 # ---------------------------------------------------------------- helpers
@@ -94,7 +101,6 @@ def confidence_badge(passages) -> str:
 
 
 def highlight_passage(text: str, query: str) -> str:
-    """Highlight the sentence in a passage most relevant to the question."""
     safe = text.replace("<", "&lt;").replace(">", "&gt;")
     sentences = re.split(r"(?<=[.!?])\s+", safe)
     qwords = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2}
@@ -116,13 +122,63 @@ def render_sources(passages, query=""):
             st.divider()
 
 
+def deadline_alert(text: str):
+    """Find the soonest future date in the answer and report the countdown."""
+    today = datetime.date.today()
+    dates = []
+    for m in re.finditer(r"(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})", text):
+        mo = MONTHS.get(m.group(2).lower()[:3])
+        if not mo:
+            continue
+        try:
+            dates.append(datetime.date(int(m.group(3)), mo, int(m.group(1))))
+        except ValueError:
+            continue
+    future = [d for d in dates if (d - today).days >= 0]
+    if not future:
+        return None
+    d = min(future)
+    n = (d - today).days
+    if n == 0:
+        return f"⏰ This date is **today** ({d.strftime('%d %B %Y')})!"
+    return f"⏰ Reminder: **{d.strftime('%d %B %Y')}** is in **{n} days**."
+
+
+def detect_conflict(passages) -> bool:
+    """Flag if two different documents give different key values (dates/amounts)."""
+    by = defaultdict(set)
+    for p in passages[:4]:
+        vals = set(re.findall(r"Rs\.?\s*\d[\d,]+|\d{1,2}\s+[A-Za-z]+\s+\d{4}|\d+%", p.text))
+        if vals:
+            by[p.source] |= vals
+    groups = [v for v in by.values() if v]
+    for a in range(len(groups)):
+        for b in range(a + 1, len(groups)):
+            if not (groups[a] & groups[b]):
+                return True
+    return False
+
+
+def speak_button(text: str, lang: str = "en-US"):
+    """Read the answer aloud using the browser's built-in speech synthesis.
+    No Python package needed — works locally and on the cloud."""
+    safe = json.dumps(text[:600])
+    st.components.v1.html(
+        f"""<button onclick='window.speechSynthesis.cancel();
+        var u=new SpeechSynthesisUtterance({safe});u.lang="{lang}";
+        window.speechSynthesis.speak(u);'
+        style="background:#2E6DB4;color:#fff;border:none;padding:6px 14px;
+        border-radius:8px;cursor:pointer;font-size:13px;">🔊 Listen</button>""",
+        height=46,
+    )
+
+
 def build_chat_pdf(history) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
                             topMargin=16 * mm, bottomMargin=16 * mm)
@@ -147,15 +203,16 @@ def build_chat_pdf(history) -> bytes:
 
 # ---------------------------------------------------------------- sidebar
 LANG_MAP = {
-    "English": "English",
-    "हिंदी (Hindi)": "Hindi (in Devanagari script)",
-    "Hinglish": "Hinglish (Hindi written in English/Roman letters)",
+    "English": ("English", "en-US"),
+    "हिंदी (Hindi)": ("Hindi (in Devanagari script)", "hi-IN"),
+    "Hinglish": ("Hinglish (Hindi written in English/Roman letters)", "en-US"),
 }
 
 with st.sidebar:
     st.header("⚙️ Settings")
     lang_choice = st.selectbox("Answer language", list(LANG_MAP.keys()))
-    language = LANG_MAP[lang_choice]
+    language, tts_lang = LANG_MAP[lang_choice]
+    simplify = st.checkbox("🧒 Explain simply (plain language)")
 
     st.divider()
     st.header("📚 Loaded documents")
@@ -197,9 +254,7 @@ with st.sidebar:
                                file_name="veridoc_chat.pdf", mime="application/pdf",
                                use_container_width=True)
         except Exception:
-            # fallback: plain text if reportlab isn't available
-            txt = "\n\n".join(f"{t['role'].upper()}: {t['content']}"
-                              for t in st.session_state.history)
+            txt = "\n\n".join(f"{t['role'].upper()}: {t['content']}" for t in st.session_state.history)
             st.download_button("⬇️ Download chat (TXT)", data=txt,
                                file_name="veridoc_chat.txt", use_container_width=True)
 
@@ -209,17 +264,32 @@ with st.sidebar:
 # ---------------------------------------------------------------- replay history
 for i, turn in enumerate(st.session_state.history):
     with st.chat_message(turn["role"]):
-        if turn["role"] == "assistant" and turn.get("badge"):
+        if turn["role"] == "user":
+            st.markdown(turn["content"])
+            continue
+
+        if turn.get("badge"):
             st.markdown(turn["badge"], unsafe_allow_html=True)
         st.markdown(turn["content"])
+
+        if not turn.get("refused"):
+            if turn.get("passages") and detect_conflict(turn["passages"]):
+                st.warning("⚠️ Different documents mention different values for this. "
+                           "Showing the most relevant — please verify against the latest circular.")
+            alert = deadline_alert(turn["content"])
+            if alert:
+                st.info(alert)
+
         if turn.get("passages"):
             render_sources(turn["passages"], turn.get("query", ""))
-        if turn["role"] == "assistant" and not turn.get("refused"):
-            fb = st.columns([1, 1, 8])
-            if fb[0].button("👍", key=f"up_{i}"):
+
+        if not turn.get("refused"):
+            b = st.columns([1, 1, 6])
+            if b[0].button("👍", key=f"up_{i}"):
                 st.session_state.likes += 1
-            if fb[1].button("👎", key=f"down_{i}"):
+            if b[1].button("👎", key=f"down_{i}"):
                 st.session_state.dislikes += 1
+            speak_button(turn["content"], turn.get("ttslang", "en-US"))
 
 
 # ---------------------------------------------------------------- follow-up suggestions
@@ -269,22 +339,19 @@ if question:
     with st.chat_message("assistant"):
         with st.spinner("Searching official documents..."):
             try:
-                result = ask(question, language=language)
+                result = ask(question, language=language, simplify=simplify)
             except Exception as e:
                 result = None
                 st.error(f"Error: {e}\n\nDid you run `python index_store.py` first?")
 
         if result:
-            badge = ""
+            badge = "" if result.refused else confidence_badge(result.passages)
             if result.refused:
                 st.warning(result.text)
             else:
-                badge = confidence_badge(result.passages)
                 if badge:
                     st.markdown(badge, unsafe_allow_html=True)
                 st.markdown(result.text)
-                if result.passages:
-                    render_sources(result.passages, question)
 
             st.session_state.history.append({
                 "role": "assistant",
@@ -293,5 +360,6 @@ if question:
                 "refused": result.refused,
                 "badge": badge,
                 "query": question,
+                "ttslang": tts_lang,
             })
             st.rerun()

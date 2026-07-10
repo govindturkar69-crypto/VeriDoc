@@ -13,6 +13,7 @@ Pillow
 streamlit
 streamlit-mic-recorder     # voice input (browser speech-to-text)
 reportlab                  # export chat as PDF
+# voice ANSWER uses the browser's built-in speech synthesis — no package needed
 
 # --- LLM backends ---
 google-generativeai      # for LLM_MODE = "gemini" (free, used on cloud)
