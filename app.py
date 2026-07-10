@@ -2,7 +2,7 @@
 Phase 5 — Streamlit chat UI.
 
 Features: animated header, confidence badge, document panel, feedback buttons,
-voice input, admin upload, Hindi/Hinglish answers, example chips, source
+voice input, admin upload, English/Hindi/Marathi answers, example chips, source
 highlighting, follow-up suggestions, PDF export, deadline reminders,
 conflicting-information detection, plain-language simplifier, voice answers.
 
@@ -123,7 +123,6 @@ def render_sources(passages, query=""):
 
 
 def deadline_alert(text: str):
-    """Find the soonest future date in the answer and report the countdown."""
     today = datetime.date.today()
     dates = []
     for m in re.finditer(r"(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})", text):
@@ -145,8 +144,8 @@ def deadline_alert(text: str):
 
 
 def detect_conflict(passages) -> bool:
-    """Conservative check: flag only when the two most relevant passages come
-    from DIFFERENT documents and mention DIFFERENT dates for the same query."""
+    """Conservative: flag only when the two most relevant passages come from
+    DIFFERENT documents and mention DIFFERENT dates."""
     tops = passages[:2]
     if len(tops) < 2 or tops[0].source == tops[1].source:
         return False
@@ -203,7 +202,7 @@ def build_chat_pdf(history) -> bytes:
 LANG_MAP = {
     "English": ("English", "en-US"),
     "हिंदी (Hindi)": ("Hindi (in Devanagari script)", "hi-IN"),
-    "Hinglish": ("Hinglish (Hindi written in English/Roman letters)", "en-US"),
+    "मराठी (Marathi)": ("Marathi (in Devanagari script)", "mr-IN"),
 }
 
 with st.sidebar:
