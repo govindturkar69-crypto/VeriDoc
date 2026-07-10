@@ -69,13 +69,51 @@ def _call_openai(prompt: str) -> str:
     return resp.choices[0].message.content.strip()
 
 
+# Remember the first Gemini model that works, so we don't re-probe every call.
+_gemini_model_name = None
+
+
 def _call_gemini(prompt: str) -> str:
-    """Google Gemini — free API tier, used for cloud deployment."""
+    """Google Gemini. Model names change over time, so we try several known
+    names and, if all fail, ask the API which models support generateContent."""
+    global _gemini_model_name
     import google.generativeai as genai
     genai.configure(api_key=config.GEMINI_API_KEY)
-    model = genai.GenerativeModel(config.GEMINI_MODEL)
-    resp = model.generate_content(prompt, generation_config={"temperature": 0.0})
-    return resp.text.strip()
+
+    def run(name):
+        return genai.GenerativeModel(name).generate_content(
+            prompt, generation_config={"temperature": 0.0}).text.strip()
+
+    if _gemini_model_name:
+        return run(_gemini_model_name)
+
+    candidates = [config.GEMINI_MODEL, "gemini-2.0-flash", "gemini-2.5-flash",
+                  "gemini-flash-latest", "gemini-1.5-flash-latest"]
+    errors = []
+    for name in candidates:
+        if not name:
+            continue
+        try:
+            out = run(name)
+            _gemini_model_name = name
+            return out
+        except Exception as e:
+            errors.append(f"{name}: {str(e)[:50]}")
+
+    # Last resort: discover a supported model from the API.
+    try:
+        for m in genai.list_models():
+            if "generateContent" in getattr(m, "supported_generation_methods", []):
+                try:
+                    out = run(m.name)
+                    _gemini_model_name = m.name
+                    return out
+                except Exception:
+                    continue
+    except Exception as e:
+        errors.append(f"list_models: {str(e)[:50]}")
+
+    raise RuntimeError("No working Gemini model found. Tried: " + " | ".join(errors))
 
 
 def _call_llm(prompt: str) -> str:
@@ -100,7 +138,6 @@ def ask(question: str, language: str = "English", simplify: bool = False) -> Ans
     """
     passages = retrieve(question)
 
-    # Layer 1 — relevance gate (honest refusal without calling the LLM).
     if not passages or passages[0].score < config.MIN_RELEVANCE:
         return Answer(text=REFUSAL, passages=[], refused=True)
 
@@ -117,7 +154,6 @@ def ask(question: str, language: str = "English", simplify: bool = False) -> Ans
     except Exception as e:
         return Answer(text=f"[LLM error: {e}]", passages=passages, refused=False)
 
-    # Layer 2 — detect a model refusal so the UI can hide citations.
     refused = REFUSAL.lower()[:30] in raw.lower()
     return Answer(text=raw, passages=[] if refused else passages, refused=refused)
 

@@ -145,23 +145,21 @@ def deadline_alert(text: str):
 
 
 def detect_conflict(passages) -> bool:
-    """Flag if two different documents give different key values (dates/amounts)."""
-    by = defaultdict(set)
-    for p in passages[:4]:
-        vals = set(re.findall(r"Rs\.?\s*\d[\d,]+|\d{1,2}\s+[A-Za-z]+\s+\d{4}|\d+%", p.text))
-        if vals:
-            by[p.source] |= vals
-    groups = [v for v in by.values() if v]
-    for a in range(len(groups)):
-        for b in range(a + 1, len(groups)):
-            if not (groups[a] & groups[b]):
-                return True
-    return False
+    """Conservative check: flag only when the two most relevant passages come
+    from DIFFERENT documents and mention DIFFERENT dates for the same query."""
+    tops = passages[:2]
+    if len(tops) < 2 or tops[0].source == tops[1].source:
+        return False
+
+    def dates(t):
+        return set(re.findall(r"\d{1,2}\s+[A-Za-z]+\s+\d{4}", t))
+
+    d0, d1 = dates(tops[0].text), dates(tops[1].text)
+    return bool(d0 and d1 and not (d0 & d1))
 
 
 def speak_button(text: str, lang: str = "en-US"):
-    """Read the answer aloud using the browser's built-in speech synthesis.
-    No Python package needed — works locally and on the cloud."""
+    """Read the answer aloud using the browser's built-in speech synthesis."""
     safe = json.dumps(text[:600])
     st.components.v1.html(
         f"""<button onclick='window.speechSynthesis.cancel();
@@ -274,7 +272,7 @@ for i, turn in enumerate(st.session_state.history):
 
         if not turn.get("refused"):
             if turn.get("passages") and detect_conflict(turn["passages"]):
-                st.warning("⚠️ Different documents mention different values for this. "
+                st.warning("⚠️ Different documents mention different dates for this. "
                            "Showing the most relevant — please verify against the latest circular.")
             alert = deadline_alert(turn["content"])
             if alert:
@@ -342,7 +340,7 @@ if question:
                 result = ask(question, language=language, simplify=simplify)
             except Exception as e:
                 result = None
-                st.error(f"Error: {e}\n\nDid you run `python index_store.py` first?")
+                st.error(f"Error: {e}")
 
         if result:
             badge = "" if result.refused else confidence_badge(result.passages)
