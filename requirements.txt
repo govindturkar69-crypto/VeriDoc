@@ -11,6 +11,7 @@ Pillow
 
 # --- UI ---
 streamlit
+streamlit-mic-recorder     # voice input (browser speech-to-text)
 
 # --- LLM backends ---
 google-generativeai      # for LLM_MODE = "gemini" (free, used on cloud)
