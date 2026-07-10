@@ -1,12 +1,12 @@
 """
 Phase 4 — Grounded answer generation.
 
-This is the core contribution of VeriDoc:
+Core contribution of VeriDoc:
   * answer ONLY from retrieved passages
   * always cite the source
   * refuse honestly when the answer is not in the documents
 
-The refusal has TWO layers of protection:
+Two layers of protection against hallucination:
   1. A relevance gate: if the best passage scores below MIN_RELEVANCE,
      we refuse before even calling the LLM.
   2. A strict prompt that instructs the model to refuse if the answer
@@ -25,10 +25,12 @@ an educational institution using ONLY the provided context passages.
 
 Rules you MUST follow:
 1. Answer strictly from the context below. Never use outside knowledge.
-2. If the answer is not clearly stated in the context, reply with EXACTLY:
+2. If the answer is not clearly stated in the context, reply with EXACTLY this
+   English sentence (do not translate it):
    "I could not find this information in the official documents."
 3. Be concise and factual. Do not guess or add caveats.
-4. After your answer, do not invent sources — the system adds citations.
+4. Do not invent sources — the system adds citations.
+5. If the answer IS found, write it in {language}.
 
 Context passages:
 {context}
@@ -52,7 +54,7 @@ def _call_ollama(prompt: str) -> str:
         "model": config.OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0.0},   # deterministic, less hallucination
+        "options": {"temperature": 0.0},
     }
     req = urllib.request.Request(
         "http://localhost:11434/api/generate",
@@ -79,10 +81,7 @@ def _call_gemini(prompt: str) -> str:
     import google.generativeai as genai
     genai.configure(api_key=config.GEMINI_API_KEY)
     model = genai.GenerativeModel(config.GEMINI_MODEL)
-    resp = model.generate_content(
-        prompt,
-        generation_config={"temperature": 0.0},
-    )
+    resp = model.generate_content(prompt, generation_config={"temperature": 0.0})
     return resp.text.strip()
 
 
@@ -100,8 +99,11 @@ def format_citation(p: Passage) -> str:
     return f"{p.source}{loc}"
 
 
-def ask(question: str) -> Answer:
-    """Retrieve, gate on relevance, then generate a grounded answer."""
+def ask(question: str, language: str = "English") -> Answer:
+    """Retrieve, gate on relevance, then generate a grounded answer.
+
+    `language` controls the language of the answer (English / Hindi / Hinglish).
+    """
     passages = retrieve(question)
 
     # Layer 1 — relevance gate (honest refusal without calling the LLM).
@@ -111,7 +113,7 @@ def ask(question: str) -> Answer:
     context = "\n\n".join(
         f"[Source: {format_citation(p)}]\n{p.text}" for p in passages
     )
-    prompt = SYSTEM_PROMPT.format(context=context, question=question)
+    prompt = SYSTEM_PROMPT.format(context=context, question=question, language=language)
 
     try:
         raw = _call_llm(prompt)
