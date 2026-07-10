@@ -5,12 +5,6 @@ Core contribution of VeriDoc:
   * answer ONLY from retrieved passages
   * always cite the source
   * refuse honestly when the answer is not in the documents
-
-Two layers of protection against hallucination:
-  1. A relevance gate: if the best passage scores below MIN_RELEVANCE,
-     we refuse before even calling the LLM.
-  2. A strict prompt that instructs the model to refuse if the answer
-     isn't in the provided context.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -30,7 +24,7 @@ Rules you MUST follow:
    "I could not find this information in the official documents."
 3. Be concise and factual. Do not guess or add caveats.
 4. Do not invent sources — the system adds citations.
-5. If the answer IS found, write it in {language}.
+5. If the answer IS found, write it in {language}.{style}
 
 Context passages:
 {context}
@@ -69,8 +63,7 @@ def _call_openai(prompt: str) -> str:
     from openai import OpenAI
     client = OpenAI(api_key=config.OPENAI_API_KEY)
     resp = client.chat.completions.create(
-        model=config.OPENAI_MODEL,
-        temperature=0.0,
+        model=config.OPENAI_MODEL, temperature=0.0,
         messages=[{"role": "user", "content": prompt}],
     )
     return resp.choices[0].message.content.strip()
@@ -99,10 +92,11 @@ def format_citation(p: Passage) -> str:
     return f"{p.source}{loc}"
 
 
-def ask(question: str, language: str = "English") -> Answer:
+def ask(question: str, language: str = "English", simplify: bool = False) -> Answer:
     """Retrieve, gate on relevance, then generate a grounded answer.
 
-    `language` controls the language of the answer (English / Hindi / Hinglish).
+    language  — language of the answer (English / Hindi / Hinglish).
+    simplify  — if True, explain in very simple, beginner-friendly words.
     """
     passages = retrieve(question)
 
@@ -113,7 +107,10 @@ def ask(question: str, language: str = "English") -> Answer:
     context = "\n\n".join(
         f"[Source: {format_citation(p)}]\n{p.text}" for p in passages
     )
-    prompt = SYSTEM_PROMPT.format(context=context, question=question, language=language)
+    style = ("\n6. Explain in very simple, easy words that a first-year student "
+             "with no background can understand.") if simplify else ""
+    prompt = SYSTEM_PROMPT.format(context=context, question=question,
+                                  language=language, style=style)
 
     try:
         raw = _call_llm(prompt)
