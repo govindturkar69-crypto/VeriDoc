@@ -1,5 +1,5 @@
 """
-Phase 5 — Streamlit chat UI.
+Phase 5 — Streamlit chat UI (with CSS animations).
 
 Run with:
     streamlit run app.py
@@ -16,6 +16,76 @@ from index_store import count, build_index
 st.set_page_config(page_title="VeriDoc", page_icon="📄", layout="centered")
 
 
+# ---------------------------------------------------------------- animations / styling
+st.markdown(
+    """
+    <style>
+    /* ---- animated gradient header banner ---- */
+    .veridoc-header {
+        background: linear-gradient(120deg, #1F335A, #2E6DB4, #1F335A);
+        background-size: 200% 200%;
+        animation: gradientShift 8s ease infinite;
+        border-radius: 16px;
+        padding: 26px 20px;
+        text-align: center;
+        color: #ffffff;
+        margin-bottom: 6px;
+        box-shadow: 0 6px 20px rgba(31,51,90,0.25);
+    }
+    @keyframes gradientShift {
+        0%   { background-position: 0% 50%; }
+        50%  { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    .veridoc-title {
+        font-size: 42px; font-weight: 800; letter-spacing: 1px; margin: 0;
+        animation: fadeInDown 0.9s ease both;
+    }
+    .veridoc-sub {
+        font-size: 15px; opacity: 0.92; margin-top: 4px;
+        animation: fadeInUp 1.1s ease both;
+    }
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-16px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    /* ---- fade-in for chat messages ---- */
+    [data-testid="stChatMessage"] {
+        animation: fadeInUp 0.5s ease both;
+    }
+    /* ---- pulsing live dot ---- */
+    .live-dot {
+        height: 9px; width: 9px; background:#3ddc84; border-radius:50%;
+        display:inline-block; margin-right:6px;
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0%   { box-shadow: 0 0 0 0 rgba(61,220,132,0.6); }
+        70%  { box-shadow: 0 0 0 8px rgba(61,220,132,0); }
+        100% { box-shadow: 0 0 0 0 rgba(61,220,132,0); }
+    }
+    /* ---- chat input accent ---- */
+    [data-testid="stChatInput"] textarea:focus {
+        border-color: #2E6DB4 !important;
+    }
+    </style>
+
+    <div class="veridoc-header">
+        <p class="veridoc-title">📄 VeriDoc</p>
+        <p class="veridoc-sub">Answers you can trust, straight from the source.</p>
+    </div>
+    <p style="text-align:center; color:#3ddc84; font-size:13px; margin-top:2px;">
+        <span class="live-dot"></span> grounded &amp; citation-backed
+    </p>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 @st.cache_resource(show_spinner="Building the document index (first run only)...")
 def _ensure_index():
     """Build the search index automatically if it doesn't exist yet.
@@ -26,9 +96,6 @@ def _ensure_index():
 
 
 _ensure_index()
-
-st.title("📄 VeriDoc")
-st.caption("Answers you can trust, straight from the source.")
 
 with st.sidebar:
     st.header("About")
