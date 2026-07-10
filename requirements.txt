@@ -12,6 +12,7 @@ Pillow
 # --- UI ---
 streamlit
 streamlit-mic-recorder     # voice input (browser speech-to-text)
+reportlab                  # export chat as PDF
 
 # --- LLM backends ---
 google-generativeai      # for LLM_MODE = "gemini" (free, used on cloud)
