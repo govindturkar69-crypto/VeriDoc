@@ -1,15 +1,22 @@
 """
-Phase 5 — Streamlit chat UI.
+Phase 5 — Streamlit chat UI (security-hardened).
 
 Features: animated header, confidence badge, document panel, feedback buttons,
-voice input, admin upload, English/Hindi/Marathi answers, example chips, source
-highlighting, follow-up suggestions, PDF export, deadline reminders,
-conflicting-information detection, plain-language simplifier, voice answers.
+voice input, admin upload (password-gated), English/Hindi/Marathi answers,
+example chips, source highlighting, follow-up suggestions, PDF export, deadline
+reminders, conflict detection, plain-language simplifier, voice answers.
+
+Security notes (see SECURITY_AUDIT.md):
+  * No secrets in code — API keys come from env vars / Streamlit secrets.
+  * Admin upload is password-gated and sanitises filenames + validates type.
+  * Voice-answer JS safely encodes text (no HTML/JS injection).
+  * Client errors are generic; details go to server logs only.
 
 Run with:
     streamlit run app.py
 """
 import io
+import os
 import re
 import json
 import datetime
@@ -28,6 +35,9 @@ except Exception:
     HAS_VOICE = False
 
 st.set_page_config(page_title="VeriDoc", page_icon="📄", layout="centered")
+
+ALLOWED_EXT = {".pdf", ".docx", ".txt"}
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")   # set to enable admin upload
 
 # ---------------------------------------------------------------- styling / animation
 st.markdown(
@@ -101,7 +111,8 @@ def confidence_badge(passages) -> str:
 
 
 def highlight_passage(text: str, query: str) -> str:
-    safe = text.replace("<", "&lt;").replace(">", "&gt;")
+    # Escape HTML so document text can never inject markup (XSS defence).
+    safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     sentences = re.split(r"(?<=[.!?])\s+", safe)
     qwords = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2}
     best_i, best_score = -1, 0
@@ -144,8 +155,6 @@ def deadline_alert(text: str):
 
 
 def detect_conflict(passages) -> bool:
-    """Conservative: flag only when the two most relevant passages come from
-    DIFFERENT documents and mention DIFFERENT dates."""
     tops = passages[:2]
     if len(tops) < 2 or tops[0].source == tops[1].source:
         return False
@@ -158,14 +167,23 @@ def detect_conflict(passages) -> bool:
 
 
 def speak_button(text: str, lang: str = "en-US"):
-    """Read the answer aloud using the browser's built-in speech synthesis."""
-    safe = json.dumps(text[:600])
+    """Read the answer aloud using the browser's speech synthesis.
+    Text is JSON-encoded and <,> are unicode-escaped so it cannot break out of
+    the script context (no HTML/JS injection, and apostrophes work fine)."""
+    safe = json.dumps(text[:600]).replace("<", "\\u003c").replace(">", "\\u003e")
+    lang_safe = re.sub(r"[^a-zA-Z-]", "", lang)   # allow only locale chars
     st.components.v1.html(
-        f"""<button onclick='window.speechSynthesis.cancel();
-        var u=new SpeechSynthesisUtterance({safe});u.lang="{lang}";
-        window.speechSynthesis.speak(u);'
+        f"""<button id="veridoc-tts"
         style="background:#2E6DB4;color:#fff;border:none;padding:6px 14px;
-        border-radius:8px;cursor:pointer;font-size:13px;">🔊 Listen</button>""",
+        border-radius:8px;cursor:pointer;font-size:13px;">🔊 Listen</button>
+        <script>
+        document.getElementById("veridoc-tts").addEventListener("click", function() {{
+            window.speechSynthesis.cancel();
+            var u = new SpeechSynthesisUtterance({safe});
+            u.lang = "{lang_safe}";
+            window.speechSynthesis.speak(u);
+        }});
+        </script>""",
         height=46,
     )
 
@@ -222,20 +240,37 @@ with st.sidebar:
     else:
         st.write("No documents indexed yet.")
 
+    # Admin upload — password-gated. On the public app it stays locked unless
+    # an ADMIN_PASSWORD secret is set, so visitors cannot change the knowledge base.
     with st.expander("🔧 Admin — add documents"):
-        ups = st.file_uploader("Upload PDF / DOCX / TXT", type=["pdf", "docx", "txt"],
-                               accept_multiple_files=True)
-        if st.button("Add & rebuild index", use_container_width=True):
-            if ups:
-                config.DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
-                for uf in ups:
-                    (config.DOCUMENTS_DIR / uf.name).write_bytes(uf.getbuffer())
-                with st.spinner("Rebuilding index..."):
-                    build_index()
-                st.success(f"Added {len(ups)} file(s) and rebuilt the index.")
-                st.rerun()
-            else:
-                st.warning("Choose at least one file first.")
+        if not ADMIN_PASSWORD:
+            st.caption("Admin upload is disabled. Set an ADMIN_PASSWORD secret to enable it.")
+        else:
+            pw = st.text_input("Admin password", type="password", key="admin_pw")
+            if pw and pw != ADMIN_PASSWORD:
+                st.error("Wrong password.")
+            elif pw == ADMIN_PASSWORD:
+                ups = st.file_uploader("Upload PDF / DOCX / TXT",
+                                       type=["pdf", "docx", "txt"], accept_multiple_files=True)
+                if st.button("Add & rebuild index", use_container_width=True):
+                    if ups:
+                        config.DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+                        added = 0
+                        for uf in ups:
+                            safe_name = os.path.basename(uf.name)          # strip path components
+                            ext = os.path.splitext(safe_name)[1].lower()
+                            if ext not in ALLOWED_EXT or not safe_name:
+                                st.warning(f"Skipped '{uf.name}' — type not allowed.")
+                                continue
+                            (config.DOCUMENTS_DIR / safe_name).write_bytes(uf.getbuffer())
+                            added += 1
+                        if added:
+                            with st.spinner("Rebuilding index..."):
+                                build_index()
+                            st.success(f"Added {added} file(s) and rebuilt the index.")
+                            st.rerun()
+                    else:
+                        st.warning("Choose at least one file first.")
 
     st.divider()
     st.header("📊 Session stats")
@@ -339,7 +374,9 @@ if question:
                 result = ask(question, language=language, simplify=simplify)
             except Exception as e:
                 result = None
-                st.error(f"Error: {e}")
+                # Generic message to the user; full details only in server logs.
+                st.error("Sorry, something went wrong while answering. Please try again.")
+                print(f"[VeriDoc error] {e}")
 
         if result:
             badge = "" if result.refused else confidence_badge(result.passages)
