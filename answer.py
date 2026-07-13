@@ -1,11 +1,3 @@
-"""
-Phase 4 — Grounded answer generation.
-
-Core contribution of VeriDoc:
-  * answer ONLY from retrieved passages
-  * always cite the source
-  * refuse honestly when the answer is not in the documents
-"""
 from __future__ import annotations
 from dataclasses import dataclass, field
 
@@ -41,7 +33,6 @@ class Answer:
     refused: bool = False
 
 
-# ------------------------------------------------------------- LLM backends
 def _call_ollama(prompt: str) -> str:
     import urllib.request, json
     payload = {
@@ -69,13 +60,10 @@ def _call_openai(prompt: str) -> str:
     return resp.choices[0].message.content.strip()
 
 
-# Remember the first Gemini model that works, so we don't re-probe every call.
 _gemini_model_name = None
 
 
 def _call_gemini(prompt: str) -> str:
-    """Google Gemini. Model names change over time, so we try several known
-    names and, if all fail, ask the API which models support generateContent."""
     global _gemini_model_name
     import google.generativeai as genai
     genai.configure(api_key=config.GEMINI_API_KEY)
@@ -100,7 +88,6 @@ def _call_gemini(prompt: str) -> str:
         except Exception as e:
             errors.append(f"{name}: {str(e)[:50]}")
 
-    # Last resort: discover a supported model from the API.
     try:
         for m in genai.list_models():
             if "generateContent" in getattr(m, "supported_generation_methods", []):
@@ -124,18 +111,12 @@ def _call_llm(prompt: str) -> str:
     return _call_ollama(prompt)
 
 
-# ------------------------------------------------------------- main entry
 def format_citation(p: Passage) -> str:
     loc = f", page {p.page}" if p.page else ""
     return f"{p.source}{loc}"
 
 
 def ask(question: str, language: str = "English", simplify: bool = False) -> Answer:
-    """Retrieve, gate on relevance, then generate a grounded answer.
-
-    language  — language of the answer (English / Hindi / Hinglish).
-    simplify  — if True, explain in very simple, beginner-friendly words.
-    """
     passages = retrieve(question)
 
     if not passages or passages[0].score < config.MIN_RELEVANCE:

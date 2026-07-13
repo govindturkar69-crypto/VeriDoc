@@ -1,20 +1,3 @@
-"""
-Phase 5 — Streamlit chat UI (security-hardened).
-
-Features: animated header, confidence badge, document panel, feedback buttons,
-voice input, admin upload (password-gated), English/Hindi/Marathi answers,
-example chips, source highlighting, follow-up suggestions, PDF export, deadline
-reminders, conflict detection, plain-language simplifier, voice answers.
-
-Security notes (see SECURITY_AUDIT.md):
-  * No secrets in code — API keys come from env vars / Streamlit secrets.
-  * Admin upload is password-gated and sanitises filenames + validates type.
-  * Voice-answer JS safely encodes text (no HTML/JS injection).
-  * Client errors are generic; details go to server logs only.
-
-Run with:
-    streamlit run app.py
-"""
 import io
 import os
 import re
@@ -37,9 +20,8 @@ except Exception:
 st.set_page_config(page_title="VeriDoc", page_icon="📄", layout="centered")
 
 ALLOWED_EXT = {".pdf", ".docx", ".txt"}
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")   # set to enable admin upload
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
-# ---------------------------------------------------------------- styling / animation
 st.markdown(
     """
     <style>
@@ -96,7 +78,6 @@ MONTHS = {m[:3]: i for i, m in enumerate(
      "august", "september", "october", "november", "december"], 1)}
 
 
-# ---------------------------------------------------------------- helpers
 def confidence_badge(passages) -> str:
     if not passages:
         return ""
@@ -111,7 +92,6 @@ def confidence_badge(passages) -> str:
 
 
 def highlight_passage(text: str, query: str) -> str:
-    # Escape HTML so document text can never inject markup (XSS defence).
     safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     sentences = re.split(r"(?<=[.!?])\s+", safe)
     qwords = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2}
@@ -167,11 +147,8 @@ def detect_conflict(passages) -> bool:
 
 
 def speak_button(text: str, lang: str = "en-US"):
-    """Read the answer aloud using the browser's speech synthesis.
-    Text is JSON-encoded and <,> are unicode-escaped so it cannot break out of
-    the script context (no HTML/JS injection, and apostrophes work fine)."""
     safe = json.dumps(text[:600]).replace("<", "\\u003c").replace(">", "\\u003e")
-    lang_safe = re.sub(r"[^a-zA-Z-]", "", lang)   # allow only locale chars
+    lang_safe = re.sub(r"[^a-zA-Z-]", "", lang)
     st.components.v1.html(
         f"""<button id="veridoc-tts"
         style="background:#2E6DB4;color:#fff;border:none;padding:6px 14px;
@@ -216,7 +193,6 @@ def build_chat_pdf(history) -> bytes:
     return buf.getvalue()
 
 
-# ---------------------------------------------------------------- sidebar
 LANG_MAP = {
     "English": ("English", "en-US"),
     "हिंदी (Hindi)": ("Hindi (in Devanagari script)", "hi-IN"),
@@ -240,8 +216,6 @@ with st.sidebar:
     else:
         st.write("No documents indexed yet.")
 
-    # Admin upload — password-gated. On the public app it stays locked unless
-    # an ADMIN_PASSWORD secret is set, so visitors cannot change the knowledge base.
     with st.expander("🔧 Admin — add documents"):
         if not ADMIN_PASSWORD:
             st.caption("Admin upload is disabled. Set an ADMIN_PASSWORD secret to enable it.")
@@ -257,7 +231,7 @@ with st.sidebar:
                         config.DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
                         added = 0
                         for uf in ups:
-                            safe_name = os.path.basename(uf.name)          # strip path components
+                            safe_name = os.path.basename(uf.name)
                             ext = os.path.splitext(safe_name)[1].lower()
                             if ext not in ALLOWED_EXT or not safe_name:
                                 st.warning(f"Skipped '{uf.name}' — type not allowed.")
@@ -293,7 +267,6 @@ with st.sidebar:
     st.caption(f"LLM: `{config.LLM_MODE}` · Re-ranking: {'on' if config.USE_RERANK else 'off'}")
 
 
-# ---------------------------------------------------------------- replay history
 for i, turn in enumerate(st.session_state.history):
     with st.chat_message(turn["role"]):
         if turn["role"] == "user":
@@ -324,7 +297,6 @@ for i, turn in enumerate(st.session_state.history):
             speak_button(turn["content"], turn.get("ttslang", "en-US"))
 
 
-# ---------------------------------------------------------------- follow-up suggestions
 followup_q = None
 if st.session_state.history and st.session_state.history[-1]["role"] == "assistant" \
         and not st.session_state.history[-1].get("refused"):
@@ -338,7 +310,6 @@ if st.session_state.history and st.session_state.history[-1]["role"] == "assista
                 followup_q = sug
 
 
-# ---------------------------------------------------------------- input area
 chip_q = None
 if not st.session_state.history:
     st.markdown("**💡 Try an example:**")
@@ -374,7 +345,6 @@ if question:
                 result = ask(question, language=language, simplify=simplify)
             except Exception as e:
                 result = None
-                # Generic message to the user; full details only in server logs.
                 st.error("Sorry, something went wrong while answering. Please try again.")
                 print(f"[VeriDoc error] {e}")
 

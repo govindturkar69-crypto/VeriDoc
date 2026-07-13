@@ -1,13 +1,3 @@
-"""
-Phase 2 — Document Ingestion.
-
-Loads PDFs, Word files, text and HTML from the documents/ folder,
-extracts clean text (with OCR fallback for scanned PDFs), and splits
-it into overlapping passages ("chunks") ready for embedding.
-
-Run directly to preview what will be ingested:
-    python ingest.py
-"""
 from __future__ import annotations
 import re
 from pathlib import Path
@@ -18,16 +8,13 @@ import config
 
 @dataclass
 class Chunk:
-    """One passage of text plus where it came from (for citations)."""
     text: str
-    source: str      # file name
-    page: int        # page number (0 if not applicable)
-    chunk_id: str    # unique id
+    source: str
+    page: int
+    chunk_id: str
 
 
-# ---------------------------------------------------------------- loaders
 def _clean(text: str) -> str:
-    """Collapse whitespace and strip junk so chunks are tidy."""
     text = text.replace("\x00", " ")
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -35,13 +22,12 @@ def _clean(text: str) -> str:
 
 
 def _load_pdf(path: Path) -> list[tuple[int, str]]:
-    """Return [(page_number, text), ...]. Falls back to OCR on empty pages."""
-    import fitz  # PyMuPDF
+    import fitz
     pages = []
     doc = fitz.open(path)
     for i, page in enumerate(doc, start=1):
         text = page.get_text().strip()
-        if len(text) < 20:                      # likely a scanned image page
+        if len(text) < 20:
             text = _ocr_page(page)
         pages.append((i, _clean(text)))
     doc.close()
@@ -49,7 +35,6 @@ def _load_pdf(path: Path) -> list[tuple[int, str]]:
 
 
 def _ocr_page(page) -> str:
-    """OCR a single PDF page. Needs Tesseract installed on the system."""
     try:
         import pytesseract
         from PIL import Image
@@ -91,16 +76,13 @@ LOADERS = {
 }
 
 
-# ---------------------------------------------------------------- chunking
 def _chunk_text(text: str, size: int, overlap: int) -> list[str]:
-    """Simple sliding-window chunker that tries to break on paragraph/space."""
     if not text:
         return []
     chunks, start = [], 0
     n = len(text)
     while start < n:
         end = min(start + size, n)
-        # try to end on a natural boundary (only when not at the very end)
         if end < n:
             boundary = text.rfind("\n", start, end)
             if boundary == -1 or boundary <= start + size // 2:
@@ -110,15 +92,13 @@ def _chunk_text(text: str, size: int, overlap: int) -> list[str]:
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
-        if end >= n:          # reached the end — stop (prevents tail-fragment spam)
+        if end >= n:
             break
         start = max(end - overlap, start + 1)
     return chunks
 
 
-# ---------------------------------------------------------------- public API
 def load_documents(folder: Path | None = None) -> list[Chunk]:
-    """Load every supported file in the folder and return a list of Chunks."""
     folder = folder or config.DOCUMENTS_DIR
     folder = Path(folder)
     all_chunks: list[Chunk] = []
@@ -145,4 +125,8 @@ def load_documents(folder: Path | None = None) -> list[Chunk]:
 
 
 if __name__ == "__main__":
-    chunks = load_docu
+    chunks = load_documents()
+    for c in chunks[:3]:
+        print("-" * 60)
+        print(f"{c.source} (page {c.page}):")
+        print(c.text[:300])

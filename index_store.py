@@ -1,14 +1,3 @@
-"""
-Phase 3 (part 1) — Build the search index.
-
-Uses a lightweight in-memory vector store (NumPy) instead of a heavy native
-database. For a small document set this is fast, uses little memory, and works
-everywhere (local + cloud, any Python version). The index is embedded and saved
-to a single pickle file so it can be reused without rebuilding.
-
-Run this whenever you add or change documents:
-    python index_store.py
-"""
 from __future__ import annotations
 import pickle
 
@@ -25,7 +14,6 @@ _store = None
 
 
 def get_embedder() -> SentenceTransformer:
-    """Load the embedding model once and reuse it."""
     global _embedder
     if _embedder is None:
         print(f"Loading embedding model: {config.EMBED_MODEL}")
@@ -34,7 +22,6 @@ def get_embedder() -> SentenceTransformer:
 
 
 def load_store() -> dict:
-    """Load the saved index into memory (or return an empty one)."""
     global _store
     if _store is None:
         if STORE_PATH.exists():
@@ -51,7 +38,6 @@ def count() -> int:
 
 
 def build_index() -> None:
-    """Full rebuild: load docs, embed, store."""
     global _store
     chunks = load_documents()
     if not chunks:
