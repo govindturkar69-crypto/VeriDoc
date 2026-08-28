@@ -2,8 +2,9 @@ import io
 import os
 import re
 import json
+import html
 import datetime
-from collections import defaultdict
+import time
 
 import streamlit as st
 
@@ -17,39 +18,10 @@ try:
 except Exception:
     HAS_VOICE = False
 
-st.set_page_config(page_title="VeriDoc", page_icon="📄", layout="centered")
+st.set_page_config(page_title="VeriDoc", page_icon=":material/verified:", layout="wide")
 
 ALLOWED_EXT = {".pdf", ".docx", ".txt"}
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-
-st.markdown(
-    """
-    <style>
-    .veridoc-header {background:linear-gradient(120deg,#1F335A,#2E6DB4,#1F335A);
-        background-size:200% 200%;animation:gradientShift 8s ease infinite;border-radius:16px;
-        padding:26px 20px;text-align:center;color:#fff;margin-bottom:6px;box-shadow:0 6px 20px rgba(31,51,90,.25);}
-    @keyframes gradientShift {0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-    .veridoc-title {font-size:42px;font-weight:800;letter-spacing:1px;margin:0;animation:fadeInDown .9s ease both;}
-    .veridoc-sub {font-size:15px;opacity:.92;margin-top:4px;animation:fadeInUp 1.1s ease both;}
-    @keyframes fadeInDown {from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes fadeInUp {from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-    [data-testid="stChatMessage"] {animation:fadeInUp .5s ease both;}
-    .live-dot {height:9px;width:9px;background:#3ddc84;border-radius:50%;display:inline-block;margin-right:6px;animation:pulse 1.5s infinite;}
-    @keyframes pulse {0%{box-shadow:0 0 0 0 rgba(61,220,132,.6)}70%{box-shadow:0 0 0 8px rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
-    .conf-badge {display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:700;color:#fff;margin-bottom:6px;}
-    mark {background:#fff3b0;padding:0 2px;border-radius:3px;}
-    </style>
-    <div class="veridoc-header">
-        <p class="veridoc-title">📄 VeriDoc</p>
-        <p class="veridoc-sub">Answers you can trust, straight from the source.</p>
-    </div>
-    <p style="text-align:center;color:#3ddc84;font-size:13px;margin-top:2px;">
-        <span class="live-dot"></span> grounded &amp; citation-backed
-    </p>
-    """,
-    unsafe_allow_html=True,
-)
-
 
 @st.cache_resource(show_spinner="Building the document index (first run only)...")
 def _ensure_index():
@@ -78,21 +50,21 @@ MONTHS = {m[:3]: i for i, m in enumerate(
      "august", "september", "october", "november", "december"], 1)}
 
 
-def confidence_badge(passages) -> str:
+def confidence_badge(passages) -> tuple[str, str]:
     if not passages:
-        return ""
+        return "No confidence", "gray"
     score = passages[0].score
     if score >= 0.65:
-        label, color = "High confidence", "#1D9E75"
+        label, color = "High confidence", "green"
     elif score >= 0.40:
-        label, color = "Medium confidence", "#D8912E"
+        label, color = "Medium confidence", "orange"
     else:
-        label, color = "Low confidence", "#D85A30"
-    return f'<span class="conf-badge" style="background:{color};">{label} · {score:.0%}</span>'
+        label, color = "Low confidence", "red"
+    return f"{label} · {score:.0%}", color
 
 
 def highlight_passage(text: str, query: str) -> str:
-    safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    safe = html.escape(text)
     sentences = re.split(r"(?<=[.!?])\s+", safe)
     qwords = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2}
     best_i, best_score = -1, 0
@@ -106,11 +78,11 @@ def highlight_passage(text: str, query: str) -> str:
 
 
 def render_sources(passages, query=""):
-    with st.expander("Show sources"):
+    with st.expander("Evidence used", icon=":material/library_books:"):
         for p in passages:
-            st.markdown(f"**{format_citation(p)}**  ·  relevance {p.score:.2f}")
+            st.markdown(f"**{format_citation(p)}**")
+            st.progress(max(0.0, min(1.0, p.score)), text=f"Relevance {p.score:.0%}")
             st.markdown(highlight_passage(p.text, query), unsafe_allow_html=True)
-            st.divider()
 
 
 def deadline_alert(text: str):
@@ -181,7 +153,7 @@ def build_chat_pdf(history) -> bytes:
     ss = ParagraphStyle("s", parent=styles["Normal"], fontSize=8, textColor=colors.grey, spaceAfter=6)
     story = [Paragraph("VeriDoc — Conversation Transcript", styles["Title"]), Spacer(1, 8)]
     for turn in history:
-        txt = turn["content"].replace("<", "&lt;").replace(">", "&gt;")
+        txt = html.escape(turn["content"])
         if turn["role"] == "user":
             story.append(Paragraph("Q: " + txt, qs))
         else:
@@ -199,24 +171,39 @@ LANG_MAP = {
     "मराठी (Marathi)": ("Marathi (in Devanagari script)", "mr-IN"),
 }
 
-with st.sidebar:
-    st.header("⚙️ Settings")
-    lang_choice = st.selectbox("Answer language", list(LANG_MAP.keys()))
-    language, tts_lang = LANG_MAP[lang_choice]
-    simplify = st.checkbox("🧒 Explain simply (plain language)")
 
-    st.divider()
-    st.header("📚 Loaded documents")
+def clear_conversation():
+    st.session_state.history = []
+    st.session_state.num_q = 0
+    st.session_state.likes = 0
+    st.session_state.dislikes = 0
+
+with st.sidebar:
+    st.title(":material/verified: VeriDoc")
+    st.caption("Grounded answers from approved documents")
+    st.badge("System ready", icon=":material/check_circle:", color="green")
+
+    st.subheader("Answer settings")
+    lang_choice = st.segmented_control(
+        "Language", list(LANG_MAP.keys()), default="English", key="answer_language"
+    )
+    language, tts_lang = LANG_MAP[lang_choice]
+    simplify = st.toggle("Explain in simple language", key="simplify")
+
+    st.subheader("Knowledge scope")
     store = load_store()
     docs = sorted(set(store["sources"]))
     if docs:
-        for d in docs:
-            st.write(f"• {d}")
-        st.caption(f"{len(docs)} documents · {len(store['ids'])} passages indexed")
+        selected_docs = st.multiselect(
+            "Documents", docs, default=docs,
+            help="Limit answers to selected official documents.",
+        )
+        st.caption(f"{len(store['ids'])} verified passages indexed")
     else:
-        st.write("No documents indexed yet.")
+        selected_docs = []
+        st.warning("No documents are indexed.", icon=":material/warning:")
 
-    with st.expander("🔧 Admin — add documents"):
+    with st.expander("Manage documents", icon=":material/upload_file:"):
         if not ADMIN_PASSWORD:
             st.caption("Admin upload is disabled. Set an ADMIN_PASSWORD secret to enable it.")
         else:
@@ -226,7 +213,7 @@ with st.sidebar:
             elif pw == ADMIN_PASSWORD:
                 ups = st.file_uploader("Upload PDF / DOCX / TXT",
                                        type=["pdf", "docx", "txt"], accept_multiple_files=True)
-                if st.button("Add & rebuild index", use_container_width=True):
+                if st.button("Add and rebuild index", type="primary", width="stretch"):
                     if ups:
                         config.DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
                         added = 0
@@ -246,8 +233,7 @@ with st.sidebar:
                     else:
                         st.warning("Choose at least one file first.")
 
-    st.divider()
-    st.header("📊 Session stats")
+    st.subheader("Current session")
     c1, c2, c3 = st.columns(3)
     c1.metric("Questions", st.session_state.num_q)
     c2.metric("👍", st.session_state.likes)
@@ -255,16 +241,28 @@ with st.sidebar:
 
     if st.session_state.history:
         try:
-            st.download_button("⬇️ Download chat (PDF)",
+            st.download_button("Download transcript",
                                data=build_chat_pdf(st.session_state.history),
                                file_name="veridoc_chat.pdf", mime="application/pdf",
-                               use_container_width=True)
+                               icon=":material/download:", width="stretch")
         except Exception:
             txt = "\n\n".join(f"{t['role'].upper()}: {t['content']}" for t in st.session_state.history)
-            st.download_button("⬇️ Download chat (TXT)", data=txt,
-                               file_name="veridoc_chat.txt", use_container_width=True)
+            st.download_button("Download transcript", data=txt,
+                               file_name="veridoc_chat.txt",
+                               icon=":material/download:", width="stretch")
+
+        st.button("Clear conversation", on_click=clear_conversation,
+                  icon=":material/delete_sweep:", width="stretch")
 
     st.caption(f"LLM: `{config.LLM_MODE}` · Re-ranking: {'on' if config.USE_RERANK else 'off'}")
+
+
+header, status = st.columns([3, 1], vertical_alignment="center")
+with header:
+    st.title("Ask your official documents", anchor=False)
+    st.caption("Answers are grounded in retrieved evidence and include source citations.")
+with status:
+    st.metric("Knowledge base", f"{len(docs)} documents", f"{len(store['ids'])} passages")
 
 
 for i, turn in enumerate(st.session_state.history):
@@ -274,8 +272,10 @@ for i, turn in enumerate(st.session_state.history):
             continue
 
         if turn.get("badge"):
-            st.markdown(turn["badge"], unsafe_allow_html=True)
+            st.badge(turn["badge"], color=turn.get("badge_color", "gray"))
         st.markdown(turn["content"])
+        if turn.get("elapsed") is not None:
+            st.caption(f"Answered in {turn['elapsed']:.1f}s · {len(turn.get('passages') or [])} sources")
 
         if not turn.get("refused"):
             if turn.get("passages") and detect_conflict(turn["passages"]):
@@ -289,10 +289,12 @@ for i, turn in enumerate(st.session_state.history):
             render_sources(turn["passages"], turn.get("query", ""))
 
         if not turn.get("refused"):
-            b = st.columns([1, 1, 6])
-            if b[0].button("👍", key=f"up_{i}"):
+            with st.container(horizontal=True):
+                up = st.button("Helpful", icon=":material/thumb_up:", key=f"up_{i}")
+                down = st.button("Needs work", icon=":material/thumb_down:", key=f"down_{i}")
+            if up:
                 st.session_state.likes += 1
-            if b[1].button("👎", key=f"down_{i}"):
+            if down:
                 st.session_state.dislikes += 1
             speak_button(turn["content"], turn.get("ttslang", "en-US"))
 
@@ -303,26 +305,23 @@ if st.session_state.history and st.session_state.history[-1]["role"] == "assista
     asked = {t["content"] for t in st.session_state.history if t["role"] == "user"}
     suggestions = [q for q in FOLLOWUP_POOL if q not in asked][:3]
     if suggestions:
-        st.caption("💬 You might also ask:")
-        cols = st.columns(len(suggestions))
-        for j, sug in enumerate(suggestions):
-            if cols[j].button(sug, key=f"fu_{len(st.session_state.history)}_{j}"):
-                followup_q = sug
+        followup_q = st.pills(
+            "Continue exploring", suggestions,
+            key=f"fu_{len(st.session_state.history)}", width="stretch"
+        )
 
 
 chip_q = None
 if not st.session_state.history:
-    st.markdown("**💡 Try an example:**")
+    st.subheader("Start with a common question")
     examples = [
         "What is the last date to pay the fee?",
         "What is the minimum attendance required?",
         "Who is eligible for the merit scholarship?",
         "When does the winter vacation begin?",
     ]
-    cols = st.columns(2)
-    for idx, ex in enumerate(examples):
-        if cols[idx % 2].button(ex, key=f"ex_{idx}", use_container_width=True):
-            chip_q = ex
+    chip_q = st.pills("Example questions", examples, label_visibility="collapsed",
+                      key="example_question", width="stretch")
 
 voice_text = None
 if HAS_VOICE:
@@ -330,10 +329,14 @@ if HAS_VOICE:
     voice_text = speech_to_text(language="en", start_prompt="🎤 Speak",
                                 stop_prompt="⏹ Stop", just_once=True, key="stt")
 
-typed = st.chat_input("Ask about fees, exams, scholarships, calendar...")
+typed = st.chat_input("Ask about fees, exams, scholarships, policies, or dates…")
 question = chip_q or followup_q or voice_text or typed
 
 if question:
+    if not selected_docs:
+        st.warning("Select at least one document in the sidebar before asking.",
+                   icon=":material/filter_alt:")
+        st.stop()
     st.session_state.num_q += 1
     st.session_state.history.append({"role": "user", "content": question})
     with st.chat_message("user"):
@@ -341,20 +344,23 @@ if question:
 
     with st.chat_message("assistant"):
         with st.spinner("Searching official documents..."):
+            started = time.perf_counter()
             try:
-                result = ask(question, language=language, simplify=simplify)
+                result = ask(question, language=language, simplify=simplify,
+                             allowed_sources=set(selected_docs))
             except Exception as e:
                 result = None
                 st.error("Sorry, something went wrong while answering. Please try again.")
                 print(f"[VeriDoc error] {e}")
 
         if result:
-            badge = "" if result.refused else confidence_badge(result.passages)
+            elapsed = time.perf_counter() - started
+            badge, badge_color = ("", "gray") if result.refused else confidence_badge(result.passages)
             if result.refused:
                 st.warning(result.text)
             else:
                 if badge:
-                    st.markdown(badge, unsafe_allow_html=True)
+                    st.badge(badge, color=badge_color)
                 st.markdown(result.text)
 
             st.session_state.history.append({
@@ -363,7 +369,9 @@ if question:
                 "passages": result.passages,
                 "refused": result.refused,
                 "badge": badge,
+                "badge_color": badge_color,
                 "query": question,
                 "ttslang": tts_lang,
+                "elapsed": elapsed,
             })
             st.rerun()

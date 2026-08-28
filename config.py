@@ -10,7 +10,6 @@ except Exception:
 BASE_DIR = Path(__file__).parent
 DOCUMENTS_DIR = BASE_DIR / "documents"
 CHROMA_DIR = BASE_DIR / "chroma_db"
-COLLECTION_NAME = "veridoc"
 
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 150

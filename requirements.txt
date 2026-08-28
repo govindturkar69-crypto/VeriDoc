@@ -22,4 +22,3 @@ openai                   # for LLM_MODE = "openai"
 
 # --- Utilities ---
 python-dotenv
-pandas

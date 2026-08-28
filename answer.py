@@ -116,8 +116,9 @@ def format_citation(p: Passage) -> str:
     return f"{p.source}{loc}"
 
 
-def ask(question: str, language: str = "English", simplify: bool = False) -> Answer:
-    passages = retrieve(question)
+def ask(question: str, language: str = "English", simplify: bool = False,
+        allowed_sources: set[str] | None = None) -> Answer:
+    passages = retrieve(question, allowed_sources=allowed_sources)
 
     if not passages or passages[0].score < config.MIN_RELEVANCE:
         return Answer(text=REFUSAL, passages=[], refused=True)

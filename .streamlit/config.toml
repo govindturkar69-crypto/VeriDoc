@@ -6,3 +6,22 @@ fileWatcherType = "none"
 
 [logger]
 level = "error"
+
+[theme]
+base = "light"
+primaryColor = "#2563EB"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F7FB"
+textColor = "#172033"
+borderColor = "#DCE3ED"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "10px"
+buttonRadius = "8px"
+font = "sans-serif"
+
+[theme.sidebar]
+backgroundColor = "#F4F7FB"
+secondaryBackgroundColor = "#E8EEF7"
+textColor = "#172033"
+borderColor = "#DCE3ED"

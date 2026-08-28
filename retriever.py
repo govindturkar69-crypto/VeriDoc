@@ -26,7 +26,8 @@ def _get_reranker():
     return _reranker
 
 
-def retrieve(question: str, top_k: int | None = None) -> list[Passage]:
+def retrieve(question: str, top_k: int | None = None,
+             allowed_sources: set[str] | None = None) -> list[Passage]:
     top_k = top_k or config.TOP_K
     store = load_store()
 
@@ -37,7 +38,12 @@ def retrieve(question: str, top_k: int | None = None) -> list[Passage]:
 
     q_vec = get_embedder().encode([question], normalize_embeddings=True)[0].astype(np.float32)
     sims = store["vectors"] @ q_vec
-    order = np.argsort(-sims)[:fetch_n]
+    indices = np.arange(len(store["ids"]))
+    if allowed_sources:
+        indices = np.array([i for i in indices if store["sources"][i] in allowed_sources])
+    if not len(indices):
+        return []
+    order = indices[np.argsort(-sims[indices])[:fetch_n]]
 
     passages = [
         Passage(
@@ -54,7 +60,6 @@ def retrieve(question: str, top_k: int | None = None) -> list[Passage]:
         scores = reranker.predict([(question, p.text) for p in passages])
         for p, s in zip(passages, scores):
             p.score = 1 / (1 + np.exp(-float(s)))
-        passages.sort(key=lambda p: p.score, reverse=True)
 
     passages.sort(key=lambda p: p.score, reverse=True)
     return passages[:top_k]

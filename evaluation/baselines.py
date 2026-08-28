@@ -68,7 +68,7 @@ def keyword_answer(question: str) -> str:
     global _kw_index
     if _kw_index is None:
         _kw_index = _KeywordIndex()
-    chunk, score = _kw_index.search(question)
+    chunk, _ = _kw_index.search(question)
     if chunk is None:
         return "(no document text available)"
     # A keyword system just hands back raw text; it cannot say "not found".
