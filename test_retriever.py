@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import numpy as np
 
+import answer
 import retriever
 
 
@@ -25,6 +26,19 @@ class RetrieverTests(unittest.TestCase):
         results = retriever.retrieve("question", allowed_sources={"two.pdf"})
 
         self.assertEqual([result.source for result in results], ["two.pdf"])
+
+
+class AnswerTests(unittest.TestCase):
+    @patch.object(answer, "_call_llm")
+    @patch.object(answer, "retrieve")
+    def test_detailed_mode_changes_the_grounding_prompt(self, retrieve, call_llm):
+        retrieve.return_value = [retriever.Passage("policy text", "policy.pdf", 1, 0.9)]
+        call_llm.return_value = "Supported answer"
+
+        result = answer.ask("Explain the policy", detail="Detailed")
+
+        self.assertEqual(result.text, "Supported answer")
+        self.assertIn("structured answer", call_llm.call_args.args[0])
 
 
 if __name__ == "__main__":

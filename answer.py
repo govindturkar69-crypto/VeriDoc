@@ -14,7 +14,7 @@ Rules you MUST follow:
 2. If the answer is not clearly stated in the context, reply with EXACTLY this
    English sentence (do not translate it):
    "I could not find this information in the official documents."
-3. Be concise and factual. Do not guess or add caveats.
+3. {detail} Do not guess or add unsupported caveats.
 4. Do not invent sources — the system adds citations.
 5. If the answer IS found, write it in {language}.{style}
 
@@ -117,6 +117,7 @@ def format_citation(p: Passage) -> str:
 
 
 def ask(question: str, language: str = "English", simplify: bool = False,
+        detail: str = "Concise",
         allowed_sources: set[str] | None = None) -> Answer:
     passages = retrieve(question, allowed_sources=allowed_sources)
 
@@ -128,8 +129,10 @@ def ask(question: str, language: str = "English", simplify: bool = False,
     )
     style = ("\n6. Explain in very simple, easy words that a first-year student "
              "with no background can understand.") if simplify else ""
+    detail_rule = ("Give a structured answer with the relevant conditions and steps."
+                   if detail == "Detailed" else "Be concise and factual.")
     prompt = SYSTEM_PROMPT.format(context=context, question=question,
-                                  language=language, style=style)
+                                  language=language, style=style, detail=detail_rule)
 
     try:
         raw = _call_llm(prompt)

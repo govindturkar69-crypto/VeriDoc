@@ -5,6 +5,7 @@ import json
 import html
 import datetime
 import time
+from pathlib import Path
 
 import streamlit as st
 
@@ -79,10 +80,17 @@ def highlight_passage(text: str, query: str) -> str:
 
 def render_sources(passages, query=""):
     with st.expander("Evidence used", icon=":material/library_books:"):
-        for p in passages:
+        for i, p in enumerate(passages):
             st.markdown(f"**{format_citation(p)}**")
             st.progress(max(0.0, min(1.0, p.score)), text=f"Relevance {p.score:.0%}")
             st.markdown(highlight_passage(p.text, query), unsafe_allow_html=True)
+            source_path = config.DOCUMENTS_DIR / Path(p.source).name
+            if source_path.is_file():
+                st.download_button(
+                    "Download original", source_path.read_bytes(), file_name=p.source,
+                    mime="application/pdf" if source_path.suffix.lower() == ".pdf" else None,
+                    icon=":material/download:", key=f"source_{i}_{p.source}",
+                )
 
 
 def deadline_alert(text: str):
@@ -189,6 +197,10 @@ with st.sidebar:
     )
     language, tts_lang = LANG_MAP[lang_choice]
     simplify = st.toggle("Explain in simple language", key="simplify")
+    detail = st.segmented_control(
+        "Answer depth", ["Concise", "Detailed"], default="Concise",
+        key="answer_depth",
+    )
 
     st.subheader("Knowledge scope")
     store = load_store()
@@ -199,6 +211,16 @@ with st.sidebar:
             help="Limit answers to selected official documents.",
         )
         st.caption(f"{len(store['ids'])} verified passages indexed")
+        with st.expander("Browse library", icon=":material/folder_open:"):
+            for i, name in enumerate(docs):
+                path = config.DOCUMENTS_DIR / Path(name).name
+                st.markdown(f":material/description: **{name}**")
+                if path.is_file():
+                    st.download_button(
+                        "Download", path.read_bytes(), file_name=name,
+                        mime="application/pdf" if path.suffix.lower() == ".pdf" else None,
+                        icon=":material/download:", key=f"library_{i}", width="stretch",
+                    )
     else:
         selected_docs = []
         st.warning("No documents are indexed.", icon=":material/warning:")
@@ -313,15 +335,29 @@ if st.session_state.history and st.session_state.history[-1]["role"] == "assista
 
 chip_q = None
 if not st.session_state.history:
-    st.subheader("Start with a common question")
-    examples = [
-        "What is the last date to pay the fee?",
-        "What is the minimum attendance required?",
-        "Who is eligible for the merit scholarship?",
-        "When does the winter vacation begin?",
+    feature_cols = st.columns(3)
+    features = [
+        (":material/fact_check:", "Evidence first", "Inspect the exact passages used for every answer."),
+        (":material/gpp_good:", "Honest by design", "VeriDoc refuses when the documents do not support an answer."),
+        (":material/translate:", "Multilingual", "Ask once and receive grounded answers in English, Hindi, or Marathi."),
     ]
-    chip_q = st.pills("Example questions", examples, label_visibility="collapsed",
-                      key="example_question", width="stretch")
+    for col, (icon, title, text) in zip(feature_cols, features):
+        with col.container(border=True, height="stretch"):
+            st.subheader(f"{icon} {title}")
+            st.caption(text)
+
+    st.subheader("Start with a common question")
+    examples = {
+        ":material/payments: Fee deadline": "What is the last date to pay the fee?",
+        ":material/school: Attendance": "What is the minimum attendance required?",
+        ":material/workspace_premium: Scholarship": "Who is eligible for the merit scholarship?",
+        ":material/calendar_month: Vacation": "When does the winter vacation begin?",
+    }
+    selected_example = st.pills(
+        "Example questions", list(examples), label_visibility="collapsed",
+        key="example_question", width="stretch",
+    )
+    chip_q = examples.get(selected_example)
 
 voice_text = None
 if HAS_VOICE:
@@ -347,6 +383,7 @@ if question:
             started = time.perf_counter()
             try:
                 result = ask(question, language=language, simplify=simplify,
+                             detail=detail,
                              allowed_sources=set(selected_docs))
             except Exception as e:
                 result = None

@@ -8,20 +8,38 @@ fileWatcherType = "none"
 level = "error"
 
 [theme]
-base = "light"
+showSidebarBorder = true
+
+[theme.light]
 primaryColor = "#2563EB"
 backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F4F7FB"
 textColor = "#172033"
 borderColor = "#DCE3ED"
 showWidgetBorder = true
-showSidebarBorder = true
 baseRadius = "10px"
 buttonRadius = "8px"
 font = "sans-serif"
 
-[theme.sidebar]
+[theme.light.sidebar]
 backgroundColor = "#F4F7FB"
 secondaryBackgroundColor = "#E8EEF7"
 textColor = "#172033"
 borderColor = "#DCE3ED"
+
+[theme.dark]
+primaryColor = "#60A5FA"
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#141E2F"
+textColor = "#E5ECF6"
+borderColor = "#2B3A52"
+showWidgetBorder = true
+baseRadius = "10px"
+buttonRadius = "8px"
+font = "sans-serif"
+
+[theme.dark.sidebar]
+backgroundColor = "#101827"
+secondaryBackgroundColor = "#1A2639"
+textColor = "#E5ECF6"
+borderColor = "#2B3A52"
