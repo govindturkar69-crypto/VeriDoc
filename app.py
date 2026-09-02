@@ -191,7 +191,24 @@ with st.sidebar:
     st.caption("Grounded answers from approved documents")
     st.badge("System ready", icon=":material/check_circle:", color="green")
 
-    st.subheader("Answer settings")
+    # Dark mode toggle
+    dark_mode = st.toggle("Dark mode", key="dark_mode")
+    # Apply dark mode CSS
+    if dark_mode:
+        st.markdown("""
+        <style>
+        body { background-color: #111111; color: #eeeeee; }
+        .stApp { background-color: #111111; color: #eeeeee; }
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <style>
+        body { background-color: #ffffff; color: #000000; }
+        .stApp { background-color: #ffffff; color: #000000; }
+        </style>
+        """, unsafe_allow_html=True)
+
     lang_choice = st.segmented_control(
         "Language", list(LANG_MAP.keys()), default="English", key="answer_language"
     )

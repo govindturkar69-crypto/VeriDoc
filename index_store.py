@@ -2,7 +2,7 @@ from __future__ import annotations
 import pickle
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
+# SentenceTransformer import moved inside get_embedder to avoid heavy dependency at import time
 
 import config
 from ingest import load_documents
@@ -13,9 +13,22 @@ _embedder = None
 _store = None
 
 
-def get_embedder() -> SentenceTransformer:
+def get_embedder() -> "SentenceTransformer":
+    """Lazily import and instantiate the SentenceTransformer model.
+
+    This avoids importing the heavy `sentence_transformers` package at module load time,
+    which allows the rest of the codebase (including unit tests) to run without the optional
+    dependency installed.
+    """
     global _embedder
     if _embedder is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as e:
+            raise ImportError(
+                "The 'sentence-transformers' package is required for embedding functionality. "
+                "Install it via `pip install sentence-transformers`."
+            ) from e
         print(f"Loading embedding model: {config.EMBED_MODEL}")
         _embedder = SentenceTransformer(config.EMBED_MODEL)
     return _embedder
