@@ -16,14 +16,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from answer import ask, REFUSAL  # noqa: E402
+from answer import ask, REFUSAL, is_refusal  # noqa: E402
 
 BENCH = Path(__file__).parent / "benchmark.csv"
 OUT = Path(__file__).parent / "results.csv"
-
-
-def is_refusal(text: str) -> bool:
-    return REFUSAL.lower()[:30] in text.lower()
 
 
 def main():

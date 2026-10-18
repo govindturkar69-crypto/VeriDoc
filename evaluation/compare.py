@@ -18,18 +18,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from answer import ask, REFUSAL          # noqa: E402
+from answer import ask, REFUSAL, is_refusal          # noqa: E402
 from baselines import keyword_answer, vanilla_answer  # noqa: E402
 
 BENCH = Path(__file__).parent / "benchmark.csv"
 OUT = Path(__file__).parent / "comparison.csv"
-
-REFUSAL_MARK = REFUSAL.lower()[:30]
-
-
-def is_refusal(text: str) -> bool:
-    t = text.lower()
-    return REFUSAL_MARK in t or "could not find" in t or "not found in" in t
 
 
 def main():

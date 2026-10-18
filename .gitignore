@@ -1,7 +1,10 @@
 __pycache__/
+*.pyc
+*.pkl
 chroma_db/
 .venv/
 .env
 .streamlit/secrets.toml
 evaluation/results.csv
 evaluation/comparison.csv
+

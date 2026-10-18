@@ -1,10 +1,45 @@
 from __future__ import annotations
+import re
+import threading
 from dataclasses import dataclass, field
 
 import config
 from retriever import retrieve, Passage
 
 REFUSAL = "I could not find this information in the official documents."
+
+_REFUSAL_PATTERNS = [
+    # English
+    r"could not find this information",
+    r"could not find",
+    r"not found in (the )?official documents",
+    r"not found in",
+    r"does not contain",
+    r"no information .*official documents",
+    # Hindi
+    r"जानकारी नहीं मिली",
+    r"दस्तावेज़ों में.*नहीं",
+    r"दस्तावेजों में.*नहीं",
+    r"आधिकारिक दस्तावेज़.*नहीं",
+    r"आधिकारिक दस्तावेज.*नहीं",
+    r"उपलब्ध नहीं है",
+    # Marathi
+    r"माहिती आढळली नाही",
+    r"माहिती सापडली नाही",
+    r"कागदपत्रां.*नाही",
+    r"अधिकृत कागदपत्र.*नाही",
+]
+_REFUSAL_REGEX = re.compile("|".join(_REFUSAL_PATTERNS), re.IGNORECASE)
+
+
+def is_refusal(text: str) -> bool:
+    """Check whether the model text represents an honest refusal in English, Hindi, or Marathi."""
+    if not text:
+        return False
+    t = text.strip()
+    if REFUSAL.lower()[:30] in t.lower():
+        return True
+    return bool(_REFUSAL_REGEX.search(t))
 
 SYSTEM_PROMPT = """You are VeriDoc, an assistant that answers questions about \
 an educational institution using ONLY the provided context passages.
@@ -31,6 +66,8 @@ class Answer:
     text: str
     passages: list[Passage] = field(default_factory=list)
     refused: bool = False
+    is_error: bool = False
+    error_message: str | None = None
 
 
 def _call_ollama(prompt: str) -> str:
@@ -41,8 +78,9 @@ def _call_ollama(prompt: str) -> str:
         "stream": False,
         "options": {"temperature": 0.0},
     }
+    base_url = getattr(config, "OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
     req = urllib.request.Request(
-        "http://localhost:11434/api/generate",
+        f"{base_url}/api/generate",
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
@@ -50,27 +88,61 @@ def _call_ollama(prompt: str) -> str:
         return json.loads(r.read())["response"].strip()
 
 
+_openai_client = None
+_openai_lock = threading.Lock()
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        with _openai_lock:
+            if _openai_client is None:
+                from openai import OpenAI
+                _openai_client = OpenAI(api_key=config.OPENAI_API_KEY)
+    return _openai_client
+
+
 def _call_openai(prompt: str) -> str:
-    from openai import OpenAI
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    client = _get_openai_client()
     resp = client.chat.completions.create(
         model=config.OPENAI_MODEL, temperature=0.0,
         messages=[{"role": "user", "content": prompt}],
     )
-    return resp.choices[0].message.content.strip()
+    content = resp.choices[0].message.content
+    return content.strip() if content else ""
 
 
 _gemini_model_name = None
+_gemini_lock = threading.Lock()
+_gemini_configured = False
 
 
 def _call_gemini(prompt: str) -> str:
-    global _gemini_model_name
+    global _gemini_model_name, _gemini_configured
     import google.generativeai as genai
-    genai.configure(api_key=config.GEMINI_API_KEY)
+
+    with _gemini_lock:
+        if not _gemini_configured:
+            genai.configure(api_key=config.GEMINI_API_KEY)
+            _gemini_configured = True
 
     def run(name):
-        return genai.GenerativeModel(name).generate_content(
-            prompt, generation_config={"temperature": 0.0}).text.strip()
+        model = genai.GenerativeModel(name)
+        resp = model.generate_content(
+            prompt, generation_config={"temperature": 0.0})
+        if not resp.candidates:
+            raise ValueError(f"Gemini returned no candidates for model {name}")
+        candidate = resp.candidates[0]
+        if hasattr(candidate, "finish_reason") and candidate.finish_reason == 3:
+            return REFUSAL
+        try:
+            return resp.text.strip()
+        except (ValueError, AttributeError) as e:
+            if candidate.content and candidate.content.parts:
+                parts_text = "".join(p.text for p in candidate.content.parts if hasattr(p, "text"))
+                if parts_text:
+                    return parts_text.strip()
+            raise ValueError(f"Unable to extract text from Gemini response: {e}") from e
 
     if _gemini_model_name:
         return run(_gemini_model_name)
@@ -137,10 +209,22 @@ def ask(question: str, language: str = "English", simplify: bool = False,
     try:
         raw = _call_llm(prompt)
     except Exception as e:
-        return Answer(text=f"[LLM error: {e}]", passages=passages, refused=False)
+        return Answer(
+            text="An error occurred while generating the answer. Please try again.",
+            passages=[],
+            refused=False,
+            is_error=True,
+            error_message=str(e),
+        )
 
-    refused = REFUSAL.lower()[:30] in raw.lower()
-    return Answer(text=raw, passages=[] if refused else passages, refused=refused)
+    refused = is_refusal(raw)
+    return Answer(
+        text=raw,
+        passages=[] if refused else passages,
+        refused=refused,
+        is_error=False,
+        error_message=None,
+    )
 
 
 if __name__ == "__main__":

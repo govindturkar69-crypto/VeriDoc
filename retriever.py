@@ -1,4 +1,5 @@
 from __future__ import annotations
+import threading
 from dataclasses import dataclass
 
 import numpy as np
@@ -7,6 +8,17 @@ import config
 from index_store import get_embedder, load_store
 
 _reranker = None
+_reranker_lock = threading.Lock()
+
+
+def _stable_sigmoid(x: float) -> float:
+    """Numerically stable sigmoid to prevent overflow in exp."""
+    if x >= 0:
+        z = np.exp(-x)
+        return float(1.0 / (1.0 + z))
+    else:
+        z = np.exp(x)
+        return float(z / (1.0 + z))
 
 
 @dataclass
@@ -20,9 +32,11 @@ class Passage:
 def _get_reranker():
     global _reranker
     if _reranker is None:
-        from sentence_transformers import CrossEncoder
-        print(f"Loading re-ranker: {config.RERANK_MODEL}")
-        _reranker = CrossEncoder(config.RERANK_MODEL)
+        with _reranker_lock:
+            if _reranker is None:
+                from sentence_transformers import CrossEncoder
+                print(f"Loading re-ranker: {config.RERANK_MODEL}")
+                _reranker = CrossEncoder(config.RERANK_MODEL)
     return _reranker
 
 
@@ -59,7 +73,7 @@ def retrieve(question: str, top_k: int | None = None,
         reranker = _get_reranker()
         scores = reranker.predict([(question, p.text) for p in passages])
         for p, s in zip(passages, scores):
-            p.score = 1 / (1 + np.exp(-float(s)))
+            p.score = _stable_sigmoid(float(s))
 
     passages.sort(key=lambda p: p.score, reverse=True)
     return passages[:top_k]

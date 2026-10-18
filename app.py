@@ -5,6 +5,7 @@ import json
 import html
 import datetime
 import time
+import secrets
 from pathlib import Path
 
 import streamlit as st
@@ -22,6 +23,7 @@ except Exception:
 st.set_page_config(page_title="VeriDoc", page_icon=":material/verified:", layout="wide")
 
 ALLOWED_EXT = {".pdf", ".docx", ".txt"}
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB max file size
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 @st.cache_resource(show_spinner="Building the document index (first run only)...")
@@ -114,6 +116,16 @@ def deadline_alert(text: str):
     return f"⏰ Reminder: **{d.strftime('%d %B %Y')}** is in **{n} days**."
 
 
+_CONFLICT_STOPWORDS = set(
+    "a an the is are was were of to in on at for and or with from by this that it as be have has had not".split()
+)
+
+
+def _content_words(text: str) -> set[str]:
+    words = set(re.findall(r"[a-z0-9]{3,}", text.lower()))
+    return words - _CONFLICT_STOPWORDS
+
+
 def detect_conflict(passages) -> bool:
     tops = passages[:2]
     if len(tops) < 2 or tops[0].source == tops[1].source:
@@ -123,7 +135,12 @@ def detect_conflict(passages) -> bool:
         return set(re.findall(r"\d{1,2}\s+[A-Za-z]+\s+\d{4}", t))
 
     d0, d1 = dates(tops[0].text), dates(tops[1].text)
-    return bool(d0 and d1 and not (d0 & d1))
+    if not (d0 and d1 and not (d0 & d1)):
+        return False
+
+    # Only flag conflict if the passages share sufficient topic-specific content words
+    shared_context = _content_words(tops[0].text) & _content_words(tops[1].text)
+    return len(shared_context) >= 3
 
 
 def speak_button(text: str, lang: str = "en-US"):
@@ -145,7 +162,8 @@ def speak_button(text: str, lang: str = "en-US"):
     )
 
 
-def build_chat_pdf(history) -> bytes:
+@st.cache_data(show_spinner=False)
+def get_cached_chat_pdf(history_snapshot: tuple) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -160,17 +178,28 @@ def build_chat_pdf(history) -> bytes:
     as_ = ParagraphStyle("a", parent=styles["Normal"], fontSize=10, spaceAfter=4)
     ss = ParagraphStyle("s", parent=styles["Normal"], fontSize=8, textColor=colors.grey, spaceAfter=6)
     story = [Paragraph("VeriDoc — Conversation Transcript", styles["Title"]), Spacer(1, 8)]
-    for turn in history:
-        txt = html.escape(turn["content"])
-        if turn["role"] == "user":
+
+    for role, content, sources_str in history_snapshot:
+        # Protect against non-latin1 characters breaking standard Helvetica in ReportLab
+        clean_content = content.encode("latin-1", "replace").decode("latin-1") if content else ""
+        txt = html.escape(clean_content)
+        if role == "user":
             story.append(Paragraph("Q: " + txt, qs))
         else:
             story.append(Paragraph("A: " + txt, as_))
-            srcs = "; ".join(format_citation(p) for p in (turn.get("passages") or []))
-            if srcs:
-                story.append(Paragraph("Sources: " + srcs, ss))
+            if sources_str:
+                story.append(Paragraph("Sources: " + html.escape(sources_str), ss))
     doc.build(story)
     return buf.getvalue()
+
+
+def build_chat_pdf(history) -> bytes:
+    snapshot = tuple(
+        (turn.get("role", ""), turn.get("content", ""),
+         "; ".join(format_citation(p) for p in (turn.get("passages") or [])))
+        for turn in history
+    )
+    return get_cached_chat_pdf(snapshot)
 
 
 LANG_MAP = {
@@ -247,9 +276,9 @@ with st.sidebar:
             st.caption("Admin upload is disabled. Set an ADMIN_PASSWORD secret to enable it.")
         else:
             pw = st.text_input("Admin password", type="password", key="admin_pw")
-            if pw and pw != ADMIN_PASSWORD:
+            if pw and not secrets.compare_digest(pw, ADMIN_PASSWORD):
                 st.error("Wrong password.")
-            elif pw == ADMIN_PASSWORD:
+            elif secrets.compare_digest(pw, ADMIN_PASSWORD):
                 ups = st.file_uploader("Upload PDF / DOCX / TXT",
                                        type=["pdf", "docx", "txt"], accept_multiple_files=True)
                 if st.button("Add and rebuild index", type="primary", width="stretch"):
@@ -257,12 +286,41 @@ with st.sidebar:
                         config.DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
                         added = 0
                         for uf in ups:
-                            safe_name = os.path.basename(uf.name)
-                            ext = os.path.splitext(safe_name)[1].lower()
-                            if ext not in ALLOWED_EXT or not safe_name:
+                            if uf.size > MAX_UPLOAD_SIZE:
+                                st.warning(f"Skipped '{uf.name}' — exceeds 20 MB size limit.")
+                                continue
+                            raw_name = Path(uf.name).name
+                            base_stem, ext = os.path.splitext(raw_name)
+                            ext = ext.lower()
+                            if ext not in ALLOWED_EXT or not base_stem:
                                 st.warning(f"Skipped '{uf.name}' — type not allowed.")
                                 continue
-                            (config.DOCUMENTS_DIR / safe_name).write_bytes(uf.getbuffer())
+
+                            data = uf.getbuffer()
+                            header = bytes(data[:8])
+                            # Validate magic bytes / signatures
+                            if ext == ".pdf" and not header.startswith(b"%PDF"):
+                                st.warning(f"Skipped '{uf.name}' — invalid PDF header.")
+                                continue
+                            elif ext == ".docx" and not header.startswith(b"PK\x03\x04"):
+                                st.warning(f"Skipped '{uf.name}' — invalid DOCX archive header.")
+                                continue
+                            elif ext in (".txt", ".md"):
+                                try:
+                                    bytes(data).decode("utf-8")
+                                except UnicodeDecodeError:
+                                    st.warning(f"Skipped '{uf.name}' — text file is not valid UTF-8.")
+                                    continue
+
+                            # Sanitize filename
+                            safe_stem = re.sub(r"[^a-zA-Z0-9_.-]", "_", base_stem).strip(". ") or "doc"
+                            dest_path = config.DOCUMENTS_DIR / f"{safe_stem}{ext}"
+                            # Prevent silent overwrite by appending timestamp on collision
+                            if dest_path.exists():
+                                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                                dest_path = config.DOCUMENTS_DIR / f"{safe_stem}_{ts}{ext}"
+
+                            dest_path.write_bytes(data)
                             added += 1
                         if added:
                             with st.spinner("Rebuilding index..."):
@@ -308,6 +366,10 @@ for i, turn in enumerate(st.session_state.history):
     with st.chat_message(turn["role"]):
         if turn["role"] == "user":
             st.markdown(turn["content"])
+            continue
+
+        if turn.get("is_error"):
+            st.error(turn.get("content") or "An error occurred while answering.")
             continue
 
         if turn.get("badge"):
@@ -409,6 +471,23 @@ if question:
 
         if result:
             elapsed = time.perf_counter() - started
+            if getattr(result, "is_error", False):
+                st.error(result.text or result.error_message or "An error occurred while answering.")
+                st.session_state.history.append({
+                    "role": "assistant",
+                    "content": result.error_message or result.text or "An error occurred.",
+                    "is_error": True,
+                    "error_message": result.error_message,
+                    "passages": [],
+                    "refused": False,
+                    "badge": "",
+                    "badge_color": "gray",
+                    "query": question,
+                    "ttslang": tts_lang,
+                    "elapsed": elapsed,
+                })
+                st.rerun()
+
             badge, badge_color = ("", "gray") if result.refused else confidence_badge(result.passages)
             if result.refused:
                 st.warning(result.text)
@@ -420,6 +499,8 @@ if question:
             st.session_state.history.append({
                 "role": "assistant",
                 "content": result.text,
+                "is_error": False,
+                "error_message": None,
                 "passages": result.passages,
                 "refused": result.refused,
                 "badge": badge,

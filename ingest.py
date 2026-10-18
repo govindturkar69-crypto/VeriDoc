@@ -24,13 +24,12 @@ def _clean(text: str) -> str:
 def _load_pdf(path: Path) -> list[tuple[int, str]]:
     import fitz
     pages = []
-    doc = fitz.open(path)
-    for i, page in enumerate(doc, start=1):
-        text = page.get_text().strip()
-        if len(text) < 20:
-            text = _ocr_page(page)
-        pages.append((i, _clean(text)))
-    doc.close()
+    with fitz.open(path) as doc:
+        for i, page in enumerate(doc, start=1):
+            text = page.get_text().strip()
+            if len(text) < 20:
+                text = _ocr_page(page)
+            pages.append((i, _clean(text)))
     return pages
 
 
