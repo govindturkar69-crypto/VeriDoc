@@ -181,15 +181,29 @@ def speak_button(text: str, lang: str = "en-US"):
     safe = json.dumps(text[:600]).replace("<", "\\u003c").replace(">", "\\u003e")
     lang_safe = re.sub(r"[^a-zA-Z-]", "", lang)
     st.components.v1.html(
-        f"""<button id="veridoc-tts"
-        style="background:#2E6DB4;color:#fff;border:none;padding:6px 14px;
-        border-radius:8px;cursor:pointer;font-size:13px;">🔊 Listen</button>
+        f"""<div style="display:flex;gap:8px;align-items:center;">
+            <button id="veridoc-tts-play"
+                style="background:#2E6DB4;color:#fff;border:none;padding:6px 14px;
+                border-radius:8px;cursor:pointer;font-size:13px;font-family:sans-serif;
+                font-weight:500;display:flex;align-items:center;gap:4px;">
+                🔊 Listen
+            </button>
+            <button id="veridoc-tts-stop"
+                style="background:#4B5563;color:#fff;border:none;padding:6px 14px;
+                border-radius:8px;cursor:pointer;font-size:13px;font-family:sans-serif;
+                font-weight:500;display:flex;align-items:center;gap:4px;">
+                ⏹ Stop
+            </button>
+        </div>
         <script>
-        document.getElementById("veridoc-tts").addEventListener("click", function() {{
+        document.getElementById("veridoc-tts-play").addEventListener("click", function() {{
             window.speechSynthesis.cancel();
             var u = new SpeechSynthesisUtterance({safe});
             u.lang = "{lang_safe}";
             window.speechSynthesis.speak(u);
+        }});
+        document.getElementById("veridoc-tts-stop").addEventListener("click", function() {{
+            window.speechSynthesis.cancel();
         }});
         </script>""",
         height=46,
