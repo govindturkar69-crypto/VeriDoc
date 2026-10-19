@@ -11,6 +11,7 @@ Pillow
 
 # --- UI ---
 streamlit
+standard-imghdr            # compatibility backport for Python 3.13+ (PEP 594 imghdr removal)
 streamlit-mic-recorder     # voice input (browser speech-to-text)
 reportlab                  # export chat as PDF
 # voice ANSWER uses the browser's built-in speech synthesis — no package needed
