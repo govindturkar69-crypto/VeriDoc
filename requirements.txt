@@ -10,7 +10,7 @@ pytesseract
 Pillow
 
 # --- UI ---
-streamlit
+streamlit>=1.44.0
 standard-imghdr            # compatibility backport for Python 3.13+ (PEP 594 imghdr removal)
 streamlit-mic-recorder     # voice input (browser speech-to-text)
 reportlab                  # export chat as PDF

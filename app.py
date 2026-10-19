@@ -66,6 +66,40 @@ def confidence_badge(passages) -> tuple[str, str]:
     return f"{label} · {score:.0%}", color
 
 
+def render_badge(label: str, icon: str = "", color: str = "gray"):
+    """Render a badge with backwards-compatibility for Streamlit < 1.44."""
+    if hasattr(st, "badge"):
+        try:
+            st.badge(label, icon=icon, color=color)
+            return
+        except Exception:
+            pass
+    icon_prefix = f"{icon} " if icon else ""
+    st.markdown(f":{color}-background[{icon_prefix}**{label}**]")
+
+
+def render_segmented_control(label: str, options: list[str], default: str, key: str):
+    """Backwards-compatible segmented control falling back to radio for older Streamlit."""
+    if hasattr(st, "segmented_control"):
+        try:
+            val = st.segmented_control(label, options, default=default, key=key)
+            return val if val is not None else default
+        except Exception:
+            pass
+    idx = options.index(default) if default in options else 0
+    return st.radio(label, options, index=idx, key=key, horizontal=True)
+
+
+def render_pills(label: str, options: list[str], key: str, label_visibility: str = "visible"):
+    """Backwards-compatible pills falling back to radio for older Streamlit."""
+    if hasattr(st, "pills"):
+        try:
+            return st.pills(label, options, key=key, label_visibility=label_visibility)
+        except Exception:
+            pass
+    return st.radio(label, options, index=None, key=key, horizontal=True, label_visibility=label_visibility)
+
+
 def highlight_passage(text: str, query: str) -> str:
     safe = html.escape(text)
     sentences = re.split(r"(?<=[.!?])\s+", safe)
@@ -218,7 +252,7 @@ def clear_conversation():
 with st.sidebar:
     st.title(":material/verified: VeriDoc")
     st.caption("Grounded answers from approved documents")
-    st.badge("System ready", icon=":material/check_circle:", color="green")
+    render_badge("System ready", icon=":material/check_circle:", color="green")
 
     # Dark mode toggle
     dark_mode = st.toggle("Dark mode", key="dark_mode")
@@ -238,12 +272,12 @@ with st.sidebar:
         </style>
         """, unsafe_allow_html=True)
 
-    lang_choice = st.segmented_control(
+    lang_choice = render_segmented_control(
         "Language", list(LANG_MAP.keys()), default="English", key="answer_language"
     )
     language, tts_lang = LANG_MAP[lang_choice]
     simplify = st.toggle("Explain in simple language", key="simplify")
-    detail = st.segmented_control(
+    detail = render_segmented_control(
         "Answer depth", ["Concise", "Detailed"], default="Concise",
         key="answer_depth",
     )
@@ -373,7 +407,7 @@ for i, turn in enumerate(st.session_state.history):
             continue
 
         if turn.get("badge"):
-            st.badge(turn["badge"], color=turn.get("badge_color", "gray"))
+            render_badge(turn["badge"], color=turn.get("badge_color", "gray"))
         st.markdown(turn["content"])
         if turn.get("elapsed") is not None:
             st.caption(f"Answered in {turn['elapsed']:.1f}s · {len(turn.get('passages') or [])} sources")
@@ -406,9 +440,9 @@ if st.session_state.history and st.session_state.history[-1]["role"] == "assista
     asked = {t["content"] for t in st.session_state.history if t["role"] == "user"}
     suggestions = [q for q in FOLLOWUP_POOL if q not in asked][:3]
     if suggestions:
-        followup_q = st.pills(
+        followup_q = render_pills(
             "Continue exploring", suggestions,
-            key=f"fu_{len(st.session_state.history)}", width="stretch"
+            key=f"fu_{len(st.session_state.history)}"
         )
 
 
@@ -432,9 +466,9 @@ if not st.session_state.history:
         ":material/workspace_premium: Scholarship": "Who is eligible for the merit scholarship?",
         ":material/calendar_month: Vacation": "When does the winter vacation begin?",
     }
-    selected_example = st.pills(
+    selected_example = render_pills(
         "Example questions", list(examples), label_visibility="collapsed",
-        key="example_question", width="stretch",
+        key="example_question"
     )
     chip_q = examples.get(selected_example)
 
@@ -493,7 +527,7 @@ if question:
                 st.warning(result.text)
             else:
                 if badge:
-                    st.badge(badge, color=badge_color)
+                    render_badge(badge, color=badge_color)
                 st.markdown(result.text)
 
             st.session_state.history.append({
