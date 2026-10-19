@@ -114,7 +114,7 @@ def highlight_passage(text: str, query: str) -> str:
     return " ".join(sentences)
 
 
-def render_sources(passages, query=""):
+def render_sources(passages, query="", prefix: str | int = "0"):
     with st.expander("Evidence used", icon=":material/library_books:"):
         for i, p in enumerate(passages):
             st.markdown(f"**{format_citation(p)}**")
@@ -125,7 +125,7 @@ def render_sources(passages, query=""):
                 st.download_button(
                     "Download original", source_path.read_bytes(), file_name=p.source,
                     mime="application/pdf" if source_path.suffix.lower() == ".pdf" else None,
-                    icon=":material/download:", key=f"source_{i}_{p.source}",
+                    icon=":material/download:", key=f"source_{prefix}_{i}_{p.source}",
                 )
 
 
@@ -421,7 +421,7 @@ for i, turn in enumerate(st.session_state.history):
                 st.info(alert)
 
         if turn.get("passages"):
-            render_sources(turn["passages"], turn.get("query", ""))
+            render_sources(turn["passages"], turn.get("query", ""), prefix=i)
 
         if not turn.get("refused"):
             with st.container(horizontal=True):
